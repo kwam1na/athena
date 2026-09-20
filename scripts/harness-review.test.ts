@@ -1292,6 +1292,10 @@ it("a preflight rejection stops expensive validation and scorecard generation", 
 });
 
 describe("consolidated coverage resource diagnostics", () => {
+  it("preserves the default logged runner's real command exit", async () => {
+    await runRawCommand(process.cwd(), "exit 0");
+    await expect(runRawCommand(process.cwd(), "exit 23")).rejects.toThrow("Command failed (23): exit 23");
+  });
   it.each(["1", "4", undefined])("times the sole hosted coverage execution and logs worker limit %s", async (workers) => {
     const calls: string[][] = []; const logs: string[] = [];
     await runRawCommand("/consumer", "bun run test:coverage", {

@@ -16,6 +16,7 @@ import {
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import { generateHarnessDocs } from "./harness-generate";
+import { VALIDATION_HEALTH_INVENTORY_PATH } from "./harness-validation-health-inventory";
 
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
 const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
@@ -825,6 +826,9 @@ export async function validateHarnessDocs(rootDir: string) {
   for (const [generatedPath, expectedContents] of generatedDocs) {
     const absolutePath = path.join(rootDir, generatedPath);
     if (!(await fileExists(absolutePath))) {
+      if (generatedPath === VALIDATION_HEALTH_INVENTORY_PATH) {
+        errors.push(`Missing generated harness doc: ${generatedPath}`);
+      }
       continue;
     }
 

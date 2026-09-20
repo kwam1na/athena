@@ -62,10 +62,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.shared-demo-admission.check-0"
       ],
@@ -112,8 +112,8 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.9c55e1f427d0103b",
         "athena.reporting-fact-ledger.check-0"
       ],
@@ -142,10 +142,10 @@
       "checks": [
         "athena.agent-harness.check-0",
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.541d7c311bfffac0",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b"
       ],
       "reason": "Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port's behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun scripts/agent-harness-fence.ts --reason \"<id>\"`) before the change deploys. Release itself is one switch: publish, smoke through the direct harness while the switch is off, one broad enable, watch the first turns, and disable to roll back — no cohorts, canaries, staged profile versions, or drain gates."
@@ -170,10 +170,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.daily-store-operations.check-0"
       ],
@@ -193,9 +193,9 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.9c55e1f427d0103b",
         "athena.stock-ops-procurement.check-0"
       ],
@@ -213,9 +213,9 @@
       ],
       "checks": [
         "athena.cash-controls.check-0",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
-        "athena.check.934b2f271b91fab1"
+        "athena.check.4cb2e799acb42cf8"
       ],
       "reason": "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed."
     },
@@ -234,10 +234,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.pos-item-adjustment.check-0"
       ],
@@ -266,10 +266,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.pos-mixed-checkout.check-0"
       ],
@@ -286,8 +286,8 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.9c55e1f427d0103b",
         "athena.service-operations.check-0"
       ],
@@ -313,8 +313,8 @@
       ],
       "checks": [
         "athena.auth-staff-store-configuration.check-0",
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1"
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8"
       ],
       "reason": "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model."
     },
@@ -333,8 +333,8 @@
         "packages/athena-webapp/types.ts"
       ],
       "checks": [
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8",
         "athena.expense-session-cart.check-0"
       ],
       "reason": "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy."
@@ -359,10 +359,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.2963064233fe773c",
-        "athena.check.2c425df3f003c174",
         "athena.check.39b9d1d73da2a212",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.9c55e1f427d0103b",
         "athena.omnichannel-order-refund.check-0"
       ],
@@ -409,11 +409,11 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.2963064233fe773c",
-        "athena.check.2c425df3f003c174",
         "athena.check.39b9d1d73da2a212",
         "athena.check.461b48c115b98f96",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.9c55e1f427d0103b",
         "athena.check.bb22321c9c9a905f",
         "athena.workflow-trace-foundation.check-0"
@@ -436,10 +436,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.pos-app-session-continuity.check-0"
       ],
@@ -466,9 +466,9 @@
         "packages/athena-webapp/src/tests/prod/posFlow.prod.spec.ts"
       ],
       "checks": [
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.2e5d2ef738e98520",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.f1250d59386a66cc",
         "athena.pos-offline-route-access.check-0"
       ],
@@ -494,8 +494,8 @@
       ],
       "checks": [
         "athena.app-update-readiness.check-0",
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1"
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8"
       ],
       "reason": "Use this when app update detection, Update Ready UI, cross-tab apply blockers, service-worker static update staging, POS update blockers, or Inventory Import update blockers change. Version detection must not reload automatically; surfaces should opt in only while active work, commands, or resumability risk make refresh unsafe."
     },
@@ -528,10 +528,10 @@
       ],
       "checks": [
         "athena.check.1c7fc4d72c67bc1e",
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
+        "athena.check.4cb2e799acb42cf8",
         "athena.check.8357d29d6b77ff2e",
-        "athena.check.934b2f271b91fab1",
         "athena.check.9c55e1f427d0103b",
         "athena.pos-terminal-health.check-0"
       ],
@@ -548,7 +548,7 @@
         "packages/athena-webapp/types.ts"
       ],
       "checks": [
-        "athena.check.2c425df3f003c174",
+        "athena.check.4cb2e799acb42cf8",
         "athena.shared-lib-utility.check-0"
       ],
       "reason": "Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites."
@@ -565,8 +565,8 @@
         "packages/athena-webapp/src/routeTree.browser-boundary.test.ts"
       ],
       "checks": [
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8",
         "athena.client-server-error-foundation.check-0"
       ],
       "reason": "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree."
@@ -586,8 +586,8 @@
       ],
       "checks": [
         "athena.admin-quick-action-toast.check-0",
-        "athena.check.2c425df3f003c174",
-        "athena.check.934b2f271b91fab1"
+        "athena.check.227811dc6cc8a0b3",
+        "athena.check.4cb2e799acb42cf8"
       ],
       "reason": "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser."
     },
@@ -640,9 +640,9 @@
         "packages/athena-webapp/tsconfig.json"
       ],
       "checks": [
-        "athena.check.2c425df3f003c174",
+        "athena.check.227811dc6cc8a0b3",
         "athena.check.461b48c115b98f96",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.4cb2e799acb42cf8",
         "athena.route-runtime-build.check-0"
       ],
       "reason": "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally."
@@ -675,7 +675,7 @@
       ],
       "checks": [
         "athena.check.07682e2189010186",
-        "athena.check.934b2f271b91fab1",
+        "athena.check.227811dc6cc8a0b3",
         "athena.storybook-frontend-tooling.check-0"
       ],
       "reason": "Use this when the document shell, favicon and web-manifest assets, Storybook config, story files, package-level frontend tooling, or the operations/landing screenshot capture scripts change need isolated validation."
@@ -904,6 +904,34 @@
       "supersedes": []
     },
     {
+      "id": "athena.check.227811dc6cc8a0b3",
+      "argv": [
+        "bun",
+        "run",
+        "build:assets"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:package-build",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [
+        "athena.check.4cb2e799acb42cf8"
+      ],
+      "supersedes": []
+    },
+    {
       "id": "athena.check.2963064233fe773c",
       "argv": [
         "/bin/sh",
@@ -912,29 +940,6 @@
       ],
       "cwd": ".",
       "profile": ".:behavior",
-      "membership": [],
-      "inputs": [
-        "bun.lockb",
-        "bunfig.toml",
-        "package.json",
-        "scripts/harness-app-registry.ts",
-        "scripts/harness-repo-validation.ts",
-        "scripts/harness-validation-impact.ts",
-        "scripts/harness-validation-plan.ts"
-      ],
-      "absentInputs": [],
-      "prerequisites": [],
-      "supersedes": []
-    },
-    {
-      "id": "athena.check.2c425df3f003c174",
-      "argv": [
-        "/bin/sh",
-        "-c",
-        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
-      ],
-      "cwd": ".",
-      "profile": "packages/athena-webapp:command",
       "membership": [],
       "inputs": [
         "bun.lockb",
@@ -1065,6 +1070,32 @@
       "supersedes": []
     },
     {
+      "id": "athena.check.4cb2e799acb42cf8",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:package-types",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
       "id": "athena.check.541d7c311bfffac0",
       "argv": [
         "/bin/sh",
@@ -1093,29 +1124,6 @@
         "/bin/sh",
         "-c",
         "bun run --filter '@athena/webapp' lint:frontend:changed"
-      ],
-      "cwd": ".",
-      "profile": "packages/athena-webapp:command",
-      "membership": [],
-      "inputs": [
-        "bun.lockb",
-        "bunfig.toml",
-        "package.json",
-        "scripts/harness-app-registry.ts",
-        "scripts/harness-repo-validation.ts",
-        "scripts/harness-validation-impact.ts",
-        "scripts/harness-validation-plan.ts"
-      ],
-      "absentInputs": [],
-      "prerequisites": [],
-      "supersedes": []
-    },
-    {
-      "id": "athena.check.934b2f271b91fab1",
-      "argv": [
-        "/bin/sh",
-        "-c",
-        "bun run --filter '@athena/webapp' build"
       ],
       "cwd": ".",
       "profile": "packages/athena-webapp:command",

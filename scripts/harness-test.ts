@@ -16,6 +16,7 @@ type SpawnedProcess = {
 };
 
 type HarnessTestOptions = {
+  selectedFiles?: string[];
   spawn?: (
     command: string[],
     options: {
@@ -23,7 +24,7 @@ type HarnessTestOptions = {
       env: NodeJS.ProcessEnv;
       stdout: "inherit";
       stderr: "inherit";
-    }
+    },
   ) => SpawnedProcess;
   passthroughArgs?: string[];
   dryRun?: boolean;
@@ -31,6 +32,7 @@ type HarnessTestOptions = {
 };
 
 type HarnessTestCliArgs = {
+  selectedFiles?: string[];
   dryRun: boolean;
   passthroughArgs: string[];
 };
@@ -47,17 +49,25 @@ export async function collectHarnessTestTargets(rootDir: string) {
 
 export async function runHarnessTest(
   rootDir: string,
-  options: HarnessTestOptions = {}
+  options: HarnessTestOptions = {},
 ) {
   const spawn = options.spawn ?? Bun.spawn;
-  const passthroughArgs = options.passthroughArgs ?? Bun.argv.slice(2);
+  const passthroughArgs =
+    options.passthroughArgs ??
+    (options.selectedFiles === undefined ? Bun.argv.slice(2) : []);
   const dryRun = options.dryRun ?? false;
   const logger = options.logger ?? console;
-  const targets = await collectHarnessTestTargets(rootDir);
+  const inventory = await collectHarnessTestTargets(rootDir);
+  const targets =
+    options.selectedFiles === undefined
+      ? inventory
+      : selectHarnessTestTargets(rootDir, inventory, options.selectedFiles);
+  if (options.selectedFiles !== undefined)
+    validateSelectedRunnerArgs(passthroughArgs);
 
   if (targets.length === 0) {
     throw new Error(
-      `[harness:test] No ${ROOT_TEST_DIRECTORY}/*${TEST_FILE_SUFFIX} files found at repo root.`
+      `[harness:test] No ${ROOT_TEST_DIRECTORY}/*${TEST_FILE_SUFFIX} files found at repo root.`,
     );
   }
 
@@ -88,6 +98,69 @@ export async function runHarnessTest(
   }
 }
 
+function invalidSelection(details: string): HarnessBlockedError {
+  return new HarnessBlockedError([
+    createHarnessBlocker({
+      code: "harness_test_selection_invalid",
+      source: { kind: "command", id: "harness:test" },
+      summary: "Explicit harness test membership is invalid.",
+      details,
+      remediations: [
+        {
+          id: "correct-harness-test-membership",
+          kind: "code_change",
+          summary:
+            "Select a nonempty list of existing direct scripts/*.test.ts files from the validation plan.",
+        },
+      ],
+    }),
+  ]);
+}
+
+function selectHarnessTestTargets(
+  rootDir: string,
+  inventory: string[],
+  selectedFiles: string[],
+): string[] {
+  if (selectedFiles.length === 0)
+    throw invalidSelection("The explicit selection is empty.");
+  const available = new Set(inventory);
+  const selected = new Set<string>();
+  for (const file of selectedFiles) {
+    const absolute = path.resolve(rootDir, file);
+    if (
+      !/^scripts\/[^/\\]+\.test\.ts$/.test(file) ||
+      !available.has(absolute)
+    ) {
+      throw invalidSelection(`Not a direct regular root test file: ${file}`);
+    }
+    selected.add(absolute);
+  }
+  return [...selected].sort((left, right) => left.localeCompare(right));
+}
+
+/** Selected execution accepts only options that preserve the declared file set. */
+function validateSelectedRunnerArgs(args: string[]): void {
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index];
+    if (option !== "--timeout") {
+      throw invalidSelection(
+        "Explicit membership supports only --timeout <milliseconds> after --; additional runner selectors could change the declared test set.",
+      );
+    }
+    const timeout = args[++index];
+    if (
+      !timeout ||
+      !/^[1-9][0-9]*$/.test(timeout) ||
+      !Number.isSafeInteger(Number(timeout))
+    ) {
+      throw invalidSelection(
+        "--timeout requires a positive integer number of milliseconds.",
+      );
+    }
+  }
+}
+
 /**
  * A failing test is the ordinary outcome this command exists to report.
  * Thrown bare, it reached the CLI boundary as an unexpected exception and
@@ -104,7 +177,8 @@ export function harnessTestsFailedBlocker(exitCode: number) {
       {
         id: "fix-failing-harness-tests",
         kind: "code_change",
-        summary: "Fix the failing tests or the behavior they cover, then rerun.",
+        summary:
+          "Fix the failing tests or the behavior they cover, then rerun.",
       },
       {
         id: "rerun-harness-tests",
@@ -119,8 +193,23 @@ export function harnessTestsFailedBlocker(exitCode: number) {
 export function parseHarnessTestCliArgs(args: string[]): HarnessTestCliArgs {
   const passthroughArgs: string[] = [];
   let dryRun = false;
+  let selectedFiles: string[] | undefined;
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--") {
+      passthroughArgs.push(...args.slice(index + 1));
+      break;
+    }
+    if (arg === "--test-file") {
+      const file = args[++index];
+      if (!file || file.startsWith("--"))
+        throw invalidSelection(
+          "--test-file requires a repository-relative test path.",
+        );
+      (selectedFiles ??= []).push(file);
+      continue;
+    }
     if (arg === "--dry-run") {
       dryRun = true;
       continue;
@@ -130,6 +219,7 @@ export function parseHarnessTestCliArgs(args: string[]): HarnessTestCliArgs {
   }
 
   return {
+    ...(selectedFiles === undefined ? {} : { selectedFiles }),
     dryRun,
     passthroughArgs,
   };

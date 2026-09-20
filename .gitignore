@@ -187,6 +187,7 @@ artifacts/harness-inferential-review/
 artifacts/harness-contract-preflight/
 artifacts/harness-scorecard/
 artifacts/harness-delivery-runs/
+artifacts/validation-ci/
 artifacts/harness-behavior/trends/
 artifacts/harness-behavior/videos/
 artifacts/*.png

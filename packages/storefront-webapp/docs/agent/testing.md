@@ -1,5 +1,17 @@
 # Storefront Webapp Testing
 
+Affected validation is currently opt-in qualification; legacy delivery validation
+remains the default. Follow the [qualification guide](../../../../docs/harness.md#affected-validation-qualification)
+for exact membership, conservative fallbacks, profiles, and native evidence.
+Only this package's qualified typecheck uses `athena-typecheck-none`; unit, asset
+build, browser, and other checks retain their declared full Git context. A
+storefront typecheck still includes its Athena source dependencies. Asset builds
+require the corresponding typecheck; `build` continues to run both. Unknown
+consumer or runner behavior expands validation instead of silently omitting it.
+Focused slices do not establish full-health aggregate floors, and a plan alone
+cannot establish a pass or evidence reuse. Merge-ready work still requires root
+`bun run pr:athena` and the mandated review sequence.
+
 Use the repo-root harness commands together:
 
 - `bun run harness:check` validates the docs themselves: required files, links, path references, and documented test commands.

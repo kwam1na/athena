@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { evaluateDeliveryRunTelemetryArtifacts, assertDeliveryRunTelemetryArtifacts, parseTelemetryArtifactArgs } from "./delivery-telemetry-artifacts";
+import { spawnSync, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -197,4 +198,47 @@ it("binds only a successful CLI gate preceded by its context and v2 observations
   git("rm", "--cached", "docs/reports/report.html");
   await writeFile(path.join(dir, "source.ts"), "export const value = 2;\n");
   git("add", "source.ts"); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(false);
+});
+
+
+describe("isolated telemetry artifact integrity", () => {
+  it("checks source artifacts without origin/main, policy loading, or a current journal", async () => {
+    const dir = await root();
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
+    await writeFile(path.join(dir, "harness.config.ts"), 'throw new Error("Candidate policy must not execute");');
+    git("add", "."); git("-c", "commit.gpgsign=false", "commit", "-qm", "base");
+    git("update-ref", "refs/delivery/base", "HEAD");
+    expect((await evaluateDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).status).toBe("pass");
+    await writeDeliveryRunTelemetryRecord(dir, record);
+    git("add", "."); git("-c", "commit.gpgsign=false", "commit", "-qm", "export source");
+    expect((await evaluateDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).status).toBe("pass");
+    const cli = spawnSync(process.execPath, [path.join(import.meta.dirname, "delivery-telemetry-artifacts.ts"), "--base", "refs/delivery/base"], {
+      cwd: dir, encoding: "utf8", env: { ...process.env, CI: "1", ATHENA_VALIDATION_MODE: "must-not-load-policy", DELIVERY_HARNESS_RUN_STORE: "must-not-read-journal" },
+    });
+    if (cli.status !== 0) throw new Error(`Artifact CLI failed: ${cli.stderr} ${cli.stdout}`);
+    expect(cli.status).toBe(0);
+    expect(cli.stdout).toContain("current-run admission not evaluated");
+    // Integrity is not current-run admission: the existing host check still
+    // rejects this export when it is not evidence for the current gate.
+    expect(collectDeliveryRunTelemetryFindings(input({ ciMode: true, currentRecordPaths: new Set() }))[0]?.code).toBe("telemetry_record_missing");
+    await writeFile(path.join(dir, recordPath), JSON.stringify({ ...record, summary: { ...record.summary, durationSeconds: 999 } }));
+    expect((await evaluateDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).findings[0]?.code).toBe("telemetry_record_malformed");
+    await expect(assertDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).rejects.toThrow();
+    const badCli = spawnSync(process.execPath, [path.join(import.meta.dirname, "delivery-telemetry-artifacts.ts"), "--base", "refs/delivery/base"], { cwd: dir, encoding: "utf8", env: { ...process.env, CI: "1", ATHENA_VALIDATION_MODE: "must-not-load-policy", DELIVERY_HARNESS_RUN_STORE: "must-not-read-journal" } });
+    expect(badCli.status).toBe(1);
+    expect(badCli.stderr).toContain("telemetry_record_malformed");
+    expect(badCli.stderr).not.toContain("ATHENA_VALIDATION_MODE");
+    await writeFile(path.join(dir, recordPath), "not JSON");
+    expect((await evaluateDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).status).toBe("fail");
+    await rm(path.join(dir, recordPath));
+    expect((await evaluateDeliveryRunTelemetryArtifacts(dir, { baseRef: "refs/delivery/base" })).status).toBe("pass");
+    expect(git("for-each-ref", "--format=%(refname)")).not.toContain("origin/main");
+  });
+  it("requires an explicit base and refuses journal arguments for artifact mode", () => {
+    expect(parseTelemetryArtifactArgs(["--base", "refs/delivery/base"])).toEqual({ baseRef: "refs/delivery/base" });
+    expect(() => parseTelemetryArtifactArgs([])).toThrow();
+    expect(() => parseTelemetryArtifactArgs(["--base", "refs/delivery/base", "--run", "run-id"])).toThrow();
+  });
 });

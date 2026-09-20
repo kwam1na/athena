@@ -9,6 +9,14 @@ import {
   writeGeneratedHarnessDocs,
 } from "./harness-generate";
 
+import { validateHarnessDocs } from "./harness-check";
+import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
+import { buildValidationPlan } from "./harness-validation-plan";
+import {
+  parseValidationHealthInventory,
+  VALIDATION_HEALTH_INVENTORY_PATH,
+} from "./harness-validation-health-inventory";
+
 const tempRoots: string[] = [];
 
 async function write(relativePath: string, contents: string, rootDir: string) {
@@ -407,5 +415,69 @@ describe("canonical plan documentation projection", () => {
     expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("[--json | --text]");
     expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("use `--help` for request fields");
     expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("Piped output defaults to JSON");
+  });
+});
+
+describe("generated protected-main health inventory", () => {
+  it("refuses a missing protected health inventory", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("packages/AGENTS.md", "# Fixture package router\n", rootDir);
+    await writeGeneratedHarnessDocs(rootDir);
+    await rm(path.join(rootDir, VALIDATION_HEALTH_INVENTORY_PATH));
+    expect(await validateHarnessDocs(rootDir)).toContain(
+      `Missing generated harness doc: ${VALIDATION_HEALTH_INVENTORY_PATH}`,
+    );
+  });
+  it("publishes full-plan identities and detects removed root, inferential and behavior checks", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("packages/AGENTS.md", "# Fixture package router\n", rootDir);
+    const docs = await writeGeneratedHarnessDocs(rootDir);
+    const text = docs.get(VALIDATION_HEALTH_INVENTORY_PATH)!;
+    const inventory = parseValidationHealthInventory(JSON.parse(text));
+    const fullPlan = buildValidationPlan(
+      collectCanonicalValidationRegistry([]),
+      [],
+      "full-health",
+    );
+    expect(inventory.checks.map((row) => row.checkId)).toEqual(
+      fullPlan.checks
+        .map((check) => check.id)
+        .sort((a, b) => a.localeCompare(b)),
+    );
+    expect(
+      await readFile(
+        path.join(rootDir, VALIDATION_HEALTH_INVENTORY_PATH),
+        "utf8",
+      ),
+    ).toBe(text);
+    const stale = `Stale generated harness doc: ${VALIDATION_HEALTH_INVENTORY_PATH}`;
+    expect(await validateHarnessDocs(rootDir)).not.toContain(stale);
+    for (const command of [
+      "harness:test",
+      "harness:inferential-review",
+      "harness:behavior",
+    ]) {
+      const check = fullPlan.checks.find((row) =>
+        row.argv.join(" ").includes(command),
+      );
+      expect(check).toBeDefined();
+      const removed = {
+        ...inventory,
+        checks: inventory.checks.filter((row) => row.checkId !== check!.id),
+      };
+      // Structurally valid metadata can still be incomplete; the generated-map
+      // comparison, not the data-only parser, enforces canonical completeness.
+      expect(parseValidationHealthInventory(removed).checks.length).toBe(
+        inventory.checks.length - 1,
+      );
+      await write(
+        VALIDATION_HEALTH_INVENTORY_PATH,
+        JSON.stringify(removed, null, 2) + "\n",
+        rootDir,
+      );
+      expect(await validateHarnessDocs(rootDir)).toContain(stale);
+    }
+    await writeGeneratedHarnessDocs(rootDir);
+    expect(await validateHarnessDocs(rootDir)).not.toContain(stale);
   });
 });

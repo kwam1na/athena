@@ -9,6 +9,11 @@ import {
   VALIDATION_PLAN_POLICY,
 } from "./harness-app-registry";
 import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
+import { buildValidationPlan } from "./harness-validation-plan";
+import {
+  generateValidationHealthInventory,
+  VALIDATION_HEALTH_INVENTORY_PATH,
+} from "./harness-validation-health-inventory";
 import { runHarnessCliBoundary } from "./harness-blockers";
 
 const GENERATED_DOC_NOTICE =
@@ -592,6 +597,17 @@ async function buildValidationMap(
 
 export async function generateHarnessDocs(rootDir: string) {
   const docs = new Map<string, string>();
+  // Full-health check identities are static; test membership is runtime evidence,
+  // not a claim made by this protected-main metadata artifact.
+  const fullPlan = buildValidationPlan(
+    collectCanonicalValidationRegistry([]),
+    [],
+    "full-health",
+  );
+  docs.set(
+    VALIDATION_HEALTH_INVENTORY_PATH,
+    `${JSON.stringify(generateValidationHealthInventory(fullPlan), null, 2)}\n`,
+  );
 
   for (const config of HARNESS_APP_REGISTRY) {
     const packageConfig = await readPackageConfig(rootDir, config.packageDir);

@@ -1,0 +1,345 @@
+{
+  "schemaVersion": "athena-validation-health-inventory/1",
+  "checks": [
+    {
+      "checkId": "athena.admin-quick-action-toast.check-0",
+      "profile": "packages/athena-webapp:unit",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.008d93fdb515038d",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.07682e2189010186",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.08303aea16b532ce",
+      "profile": "packages/storefront-webapp:package-types",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.08f93b0a076b0105",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.098b281e11d36335",
+      "profile": "packages/storefront-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.12c552bc88327273",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.1c7fc4d72c67bc1e",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.227811dc6cc8a0b3",
+      "profile": "packages/athena-webapp:package-build",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.2963064233fe773c",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.2e5d2ef738e98520",
+      "profile": "packages/athena-webapp:browser",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.2fd1f99b6d81db41",
+      "profile": "docs-publishing",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.32384e7671ea4ece",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.39b9d1d73da2a212",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.3a4daddebd50f316",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.461b48c115b98f96",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.4cb2e799acb42cf8",
+      "profile": "packages/athena-webapp:package-types",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.541d7c311bfffac0",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.659551b9822621c0",
+      "profile": "packages/storefront-webapp:fallback-suite",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.6e6ee358586b62fb",
+      "profile": "packages/storefront-webapp:package-build",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.76d765da67a9fe11",
+      "profile": "packages/storefront-webapp:browser",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.8357d29d6b77ff2e",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.96b0048d84104798",
+      "profile": ".:aggregate-coverage",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.99d6ecc8d782b065",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.9c55e1f427d0103b",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.a5ec25226b74b88b",
+      "profile": "packages/athena-webapp:fallback-suite",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.b54ac6f1e8020d22",
+      "profile": "docs-publishing",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.bb22321c9c9a905f",
+      "profile": "packages/athena-webapp:timer-stress",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.bfc4c681ede1f4dc",
+      "profile": "packages/athena-webapp:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.c7edf42bc28e8b2c",
+      "profile": "packages/valkey-proxy-server:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/valkey-proxy-server"
+      }
+    },
+    {
+      "checkId": "athena.check.c8b7e2913b7845c8",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.ca1460a00ccf6026",
+      "profile": "packages/valkey-proxy-server:fallback-suite",
+      "scope": {
+        "kind": "package",
+        "package": "packages/valkey-proxy-server"
+      }
+    },
+    {
+      "checkId": "athena.check.cb2aab682811b706",
+      "profile": "plan-integrity",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.cfe25747f6857d61",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.d0b6b219f1779557",
+      "profile": "packages/valkey-proxy-server:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/valkey-proxy-server"
+      }
+    },
+    {
+      "checkId": "athena.check.d3af5e529de6d34f",
+      "profile": "packages/valkey-proxy-server:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/valkey-proxy-server"
+      }
+    },
+    {
+      "checkId": "athena.check.d730c2c077db1674",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.d9c7079c9a4ebaec",
+      "profile": ".:command",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.ee6b3f65ff797a9d",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.f1250d59386a66cc",
+      "profile": "packages/athena-webapp:browser",
+      "scope": {
+        "kind": "package",
+        "package": "packages/athena-webapp"
+      }
+    },
+    {
+      "checkId": "athena.check.f1507470f5d74666",
+      "profile": "packages/valkey-proxy-server:command",
+      "scope": {
+        "kind": "package",
+        "package": "packages/valkey-proxy-server"
+      }
+    },
+    {
+      "checkId": "athena.check.f20a8341dbe96c35",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.f81f75f8e965aa7a",
+      "profile": "docs-publishing",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "athena.check.f9df93655e8a833c",
+      "profile": ".:behavior",
+      "scope": {
+        "kind": "repo"
+      }
+    },
+    {
+      "checkId": "storefront.checkout-auth-boundary.check-0",
+      "profile": "packages/storefront-webapp:unit",
+      "scope": {
+        "kind": "package",
+        "package": "packages/storefront-webapp"
+      }
+    }
+  ]
+}

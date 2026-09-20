@@ -9,7 +9,15 @@
 - For `packages/athena-webapp`, start with [athena-webapp/AGENTS.md](./athena-webapp/AGENTS.md).
 - For `packages/storefront-webapp`, start with [storefront-webapp/AGENTS.md](./storefront-webapp/AGENTS.md).
 - For `packages/valkey-proxy-server`, start with [valkey-proxy-server/AGENTS.md](./valkey-proxy-server/AGENTS.md).
-- If a task spans both apps, read both harnesses first, keep docs in sync with code, and finish with `bun run harness:review`.
+- If a task spans both apps, read both harnesses first, keep docs in sync with code, and finish with the root `bun run pr:athena` delivery gate.
+
+Use focused package sensors while iterating; at the merge-ready boundary follow
+root AGENTS.md and `bun run pr:athena`. The affected executor is opt-in
+qualification, with legacy validation still authoritative. Its exact-membership
+selection and product-owned evidence reuse do not replace independent review or
+the delivery gate. Unknown consumers/configuration widen to the declared fallback;
+full-health retains complete inventory and aggregate floors. See
+[affected validation qualification](../docs/harness.md#affected-validation-qualification).
 
 ## Shared Repo Rules
 

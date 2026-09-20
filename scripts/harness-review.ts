@@ -615,11 +615,10 @@ export async function runRawCommand(rootDir: string, command: string, options: {
   // Coverage and the mapped package suite must inherit the same environment;
   // a login shell could silently source a different execution profile.
   const argv = command === "bun run test:coverage" ? ["bun", "run", "test:coverage"] : [shellPath, "-lc", command];
-  const subprocess = (options.spawn ?? spawnLoggedValidation)(timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv, {
-    cwd: rootDir,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  const executionArgv = timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv;
+  const subprocess = options.spawn
+    ? options.spawn(executionArgv, { cwd: rootDir, stdout: "inherit", stderr: "inherit" })
+    : spawnLoggedValidation(executionArgv, { cwd: rootDir });
   const exitCode = await subprocess.exited;
 
   if (exitCode !== 0) {

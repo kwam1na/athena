@@ -644,12 +644,274 @@ inspect the retained command output rather than expecting retired wrapper
 Avoid weakening the sensor to get past a failure. If the failure is noisy, fix
 the sensor's precision with a test so the repo learns from the false positive.
 
-Repeated command execution within one `harness:review` invocation is avoided by
+In the default legacy path, repeated command execution within one `harness:review` invocation is avoided by
 deduplicating its selected and required commands. Receipt reuse is a separate
 installed-product decision: `prepare --refresh-record-neutral` reuses success
 only when strict validation, policy, wiring and base still match. Ordinary
 preparation runs its checks. Pre-push verification reports current admission;
 it does not report Athena-specific proof-cache statuses.
+
+## Affected Validation Qualification
+
+Legacy validation remains the default. The affected path is an explicit
+qualification mode; V26-2071 owns activation after its evidence is complete.
+Neither a comparison plan nor a green CI validation record replaces the delivery
+contract, independent review, `pr:athena`, or pre-push verification.
+
+Athena owns check membership, consumer analysis, command characterization,
+execution-profile declarations, and protected health admission. The installed
+product owns private execution, attempt identity, evidence reuse, portable
+records, and verification. Read the selected release with `bun run delivery:status`
+and check its compiled policy with `bun run policy:check`. Qualification belongs
+to that exact release and policy; do not transfer an older archive's results to a
+successor or bypass a missing scoped-execution capability. The implementation
+boundaries are [capture](../scripts/harness-validation-capture.ts),
+[policy projection](../scripts/harness-validation-policy.ts), and the
+[public native lifecycle adapter](../scripts/harness-validation-native.ts).
+
+### Selection, Execution, And Reuse
+
+`bun run harness:plan -- --help` documents the read-only planner. For example:
+
+```sh
+bun run harness:plan -- --input scripts/fixtures/affected-validation/planner/report-request.json --json
+```
+
+This fixture demonstrates selection, not evidence for the working tree. Native
+capture uses `--capture-config <config.json> --mode <delivery|comparison|full-health>`
+with the complete trusted configuration. The planner's `delivery` mode does not
+activate delivery: `harness.config.ts` currently accepts only `comparison` or
+`full-health` through `ATHENA_VALIDATION_MODE`, and otherwise loads legacy policy.
+
+The local opt-in reads the authenticated default branch's generated
+[health inventory](../.agents/validation-health-inventory.json) and current health
+before selecting checks. Relevant findings or unavailable history require the
+complete full-health plan; missing trusted inventory or workflow identity blocks
+selection. The [local live check](../scripts/harness-validation-local-health-check.ts)
+reads authority and source selection again during admission. It requires the
+original health revision and validation context, while the product independently
+requires every selected check to pass. A successful candidate repair leaves the
+global finding open until protected revalidation closes it.
+
+Read each check's `reasons`, exact membership, inputs, and prerequisites. Surface
+matches explain selection; supersession explains why one declared check covers
+another. Base and candidate consumer graphs preserve deleted or renamed
+consumers. Unknown imports, uncharacterized runner configuration, removed tests,
+and unresolved consumers widen to the declared package or repository fallback.
+Unknown impact never means no work. Full-health selects the complete inventory,
+including aggregate floors that a focused unit slice cannot establish.
+
+The [command projection](../scripts/harness-validation-command.ts) preserves
+exact test membership. Package typechecks and asset builds are separate
+obligations; an asset build requires its package typecheck. The public package
+`build` command still includes both Vite and TypeScript. Exact characterized root
+TypeScript commands share the package typecheck obligation; additional flags or
+shell syntax are not silently normalized. Test/build script changes and lifecycle
+hooks must be characterized before the affected executor accepts them.
+
+The [runtime profiles](../scripts/harness-validation-runtime.ts) are explicit:
+
+| Profile | Git context | Declared use |
+| --- | --- | --- |
+| `athena-typecheck-none` | `none` | Only the two app `package-types` checks; retains their complete declared inputs, including storefront's Athena dependencies, and declares no mutable outputs. |
+| `athena-core-full` | `full` | Checks that produce no declared artifacts. The selection guard has its own dependency-free full-Git profile. |
+| `athena-webapp-unit-none`, `athena-storefront-unit-none` | `none` | Exact qualified package unit commands and memberships; each may write only its package's pinned Vitest results cache under `.cache/vitest/`. |
+| `athena-webapp-build-none`, `athena-storefront-build-none` | `none` | Exact qualified asset-build commands; each may write only its package's `dist/`. |
+| `athena-webapp-unit-full`, `athena-storefront-unit-full`, `athena-webapp-build-full`, `athena-storefront-build-full` | `full` | Fallback for unqualified commands or memberships, with the same package-specific cache or build output permissions. |
+| `athena-coverage-full`, `athena-storybook-full`, `athena-inferential-full` | `full` | Separate coverage, Storybook and inferential artifact directories. |
+| `athena-behavior-full` | `full` | Runtime scenarios with browser dependencies and `artifacts/harness-behavior/` output. |
+| `athena-browser-full`, `athena-storefront-browser-full` | `full` | Browser checks with browser dependencies; bound Playwright flags relocate reports/results under `artifacts/validation-playwright/`. Operator browser checks also permit their app build output. |
+
+Mutable outputs are write permissions, not source exclusions. Broad `artifacts/`
+and the tracked storefront Playwright report are not writable profile roots.
+The runtime regression checks every output declaration against the actual tracked
+inventory. The [qualification catalog](../scripts/fixtures/affected-validation/frontend-qualified-profiles.json)
+retains the six native record digests and exact exercised commands and memberships.
+The source, existing-report and new-report cases for both applications passed
+native preparation, gate, record and verification: 33 scoped/full pairs matched,
+and report follow-ups retained 14 prior attempt selections. Eligibility requires
+the complete command and membership tuple; adding or removing a test falls back
+to private Git. Specific Convex contract tests in the qualified frontend groups
+are included, while arbitrary backend groups and whole-package suites are not.
+Qualification's diagnostic output directory is not a production write permission.
+This evidence does not establish hosted health, performance or default activation.
+
+Both package Vitest configurations relocate their cache outside `node_modules`.
+The pinned unnamed Vitest project writes
+`.cache/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json`;
+unit profiles allow only that exact package-local file, and coverage permits both
+package result files alongside its reports. Installed dependencies and adjacent
+cache files remain protected. A Vitest upgrade or project-name change requires
+checking the actual cache path and qualifying the corresponding profile change.
+
+No-Git qualification is not permission to remove source inputs or apply that
+profile to another command. Full profiles retain the declared Git context;
+base movement may invalidate evidence even when source bytes appear unchanged.
+Dependency setup, mutable outputs, environment flags, and credential identities
+are part of the declared profile. Unavailable credentials do not count as tested
+coverage.
+
+A plan digest describes selected work. Only successful native verification binds
+passing attempts to the record. Inspect the adapter's phase results, selected
+attempts and before/after observations to distinguish execution from reuse;
+retain the product's invalidation/refusal reason. Failed, tampered, incompatible,
+or differently bound evidence cannot be promoted by editing a summary. Policy,
+release, profile, input, environment, and base changes must pass the product's
+current freshness decision. Do not infer reuse from a previous green log.
+
+Reports can be neutral to review while remaining inputs to report presentation,
+link, fingerprint, or documentation-publishing checks. A report refresh should
+select those obligations without unnecessarily rerunning unrelated application
+tests, but only actual native evidence can establish which checks were reused.
+Publishing still includes its declared build/typecheck prerequisites.
+
+### Hosted Trust And Health
+
+The [PR workflow](../.github/workflows/athena-pr-tests.yml) defaults to `legacy`;
+its manual `validation_mode: affected-qualification` input exercises the affected
+path. The hosted CLI advertises its exact interface:
+
+```sh
+bun run harness:validation-ci -- --help
+```
+
+`guard --candidate-root <absolute-path>` runs from the pinned trusted base. It
+authenticates workflow, repository, run, head and base, and requires clean,
+separate checkouts. Historical absence of the guard or a committed authority
+change selects legacy validation. A malformed, modified, escaping, or mismatched
+present guard fails closed. Candidate configuration and uploaded JSON cannot
+appoint themselves as trusted policy.
+
+`qualify` drives native `prepare`, `gate`, `record`, then `verify`. A clean final
+job uses `verify-final` with trusted `VALIDATION_PLAN_MODE` and successful
+`VALIDATION_EXECUTION_RESULT` job outputs. It verifies the original portable
+record against independently reconstructed authority and rereads protected
+health. These are hosted commands, not local substitutes for authenticated CI.
+The five required validation contexts retain their existing names.
+
+CI's separate `athena.validation-ci` gate uses identity `athena-validation-ci/v1`.
+Only JSON under `artifacts/validation-ci/` is its review/record-neutral transport;
+the verified record is transported as `artifacts/validation-ci/delivery-record.json`.
+Cold verification derives the native candidate-keyed record path with the public
+`deliveryRecordPathFor` API and a fresh CI candidate capture, then verifies those
+original bytes. This does not make source, reports, telemetry, arbitrary HEAD
+changes, or the delivery gate neutral.
+Cold verification consumes the original portable record, not a locally rebuilt
+attempt store or an uploaded summary's success claim.
+
+The [health workflow](../.github/workflows/athena-validation-health.yml) runs on
+the default branch daily at 14:00 UTC and by manual dispatch. It forces fresh
+execution of the complete inventory and retains `health.json` as the
+`athena-validation-health` artifact. Dispatch a new run; GitHub reruns are refused.
+Health must be authenticated and fresh under the declared policy. Missing,
+stale, unavailable, or relevant failing health requires full validation or
+refuses admission; it never supplies permission to skip checks.
+
+The hosted full-health command is `bun run harness:validation-ci -- health`.
+`--bootstrap` applies only to genuinely empty history. For unavailable prior
+history, the explicit hosted recovery command is:
+
+```sh
+bun run harness:validation-ci -- health --recover-unknown-history
+```
+
+Use the workflow's corresponding `recover_unknown_history` dispatch input to
+supply the authenticated environment. Recovery retains unknown history as a
+repository-wide finding; a fresh green run does not erase prior failures.
+Known findings and approved classifications remain cumulative. Global closure
+requires the protected approval and revalidation protocol, not an edited digest.
+
+The selection guard binds `ATHENA_VALIDATION_HEALTH_REVISION` into native
+evidence. Final admission cannot relabel an old proof with a later revision.
+Candidate repair requires matching candidate, profile, finding revision and
+health revision; a partial unit slice is not proof of a complete health check.
+Candidate admission, hosted execution, and approved global closure are separate
+facts. See [final health admission](../scripts/harness-validation-ci-admission.ts)
+and [health authority](../scripts/harness-validation-health.ts).
+
+Isolated checks use `delivery:telemetry-artifacts-check` to validate changed
+product JSON against `refs/delivery/base`; they do not inspect a host run store.
+The local delivery gate retains its live telemetry obligation. The final hosted
+verifier also requires the current delivery export on the original authenticated
+candidate before publishing successful required contexts. Artifact integrity
+alone cannot establish delivery completion.
+
+Private snapshots expose the captured base as `refs/delivery/base`. A hosted
+caller may identify that base by SHA, so checks cannot assume `origin/main`
+exists. The characterized report and inferential-review commands receive an
+explicit `--base refs/delivery/base`; changed-file lint receives its existing
+base-ref environment option. The adapter preserves the authored scripts and
+binds the resulting execution commands in native configuration. Unrecognized
+command shapes are not rewritten, and changed root script definitions refuse
+the characterized projection until qualified.
+
+### Operator Walkthrough Evidence Before Activation
+
+These are the required qualification exercises, not claims that they have run.
+The integration owner must retain actual commands, candidate/release bindings,
+plans, native attempts, phase exits, final records and hosted run links:
+
+| Exercise | Required observation |
+| --- | --- |
+| Refresh a report after a passing application gate | Replan with native capture; rerun the canonical lifecycle. Report/publishing obligations update, unrelated application attempts reuse where qualified, and the final record verifies. |
+| Repair a late failed check | Keep unaffected valid successes; rerun the failed scope. The original failure and a tampered record must both refuse admission. |
+| Move the base or change installed generation/policy | Reprepare and recapture complete base/candidate inventories. Retain actual invalidation or explicitly qualified compatibility; deleted base consumers cannot disappear. |
+| Make health unavailable | Retain the typed reason; run the hosted full-health recovery above. Known failures and unknown history remain visible, with truthful credential coverage. |
+| Repair a candidate while a global finding stays open | Bind the proof to the exact candidate/profile/health revision and complete check inventory. Demonstrate candidate admission without falsely closing the protected finding. |
+
+V26-2071 additionally requires the finite injected-fault corpus, at least three
+matched timing samples for representative expensive cases including setup and
+health cost, actual hosted lifecycle and health seed/cold read, all five required
+contexts, current review/gates, and a force-full rollback demonstration. Publish
+activation wording and policy together only after that evidence is complete.
+
+### Activation PR Checklist
+
+This is the standing-policy delta for V26-2071, not a claim that the default has
+changed. Apply it in the reviewed activation PR after the preceding qualification
+requirements pass. Keep the qualification fixture's original bindings when the
+delivery candidate changes; reprepare and let the product evaluate freshness.
+
+| Authored location | Change together with executable activation |
+| --- | --- |
+| Root `AGENTS.md`, validation ladder | Replace opt-in/legacy-default language with affected validation as the default for qualified scopes. Retain exact membership, conservative fallback, preparation, independent review, `pr:athena`, and pre-push verification. |
+| `packages/AGENTS.md`, shared validation guidance | State that the affected executor supplies default validation obligations through `pr:athena`; product-owned reuse does not replace review or the delivery gate. Preserve full-health floors. |
+| Both webapp `docs/agent/testing.md` introductions | Replace opt-in language and link the actual default and recovery procedure here. Name only profiles qualified and enabled by the final configuration; exploratory execution alone does not enable a profile. |
+| This guide's legacy deduplication paragraph | Describe it as the legacy fallback path rather than the default path. |
+| This guide's affected-validation introduction | State the activated scope and link immutable release, hosted, corpus, timing and rollback evidence. Preserve existing anchors or update every caller. |
+| This guide's local mode instructions | Document the exact configured default and supported overrides. Current local health accepts `comparison` and `full-health`; do not invent `ATHENA_VALIDATION_MODE=delivery` from the planner's separate mode vocabulary. |
+| This guide's hosted qualification instructions | Replace manual-only routing with the actual automatic PR trigger and retained explicit fallback. Preserve pinned-base guard and cold-verification authority. |
+| The walkthrough table above | Link completed exercises and their release/candidate/health bindings, and retain the recovery instructions. Record actual sample counts, setup/health costs, contention and remaining conservative fallback boundaries. |
+| This guide's admission table | Describe selected native obligations plus live protected-health admission rather than the monolithic legacy review provider as the whole default gate. Preserve accepted contract, review, telemetry, record and pre-push obligations. |
+
+The coupled executable changes are:
+
+1. In `harness.config.ts`, intentionally select the qualified scoped runtime by
+   default and preserve a force-full override. Keeping the existing runtime mode
+   names avoids adding a new mode contract; any new name must be qualified across
+   local health, native execution and CI, not merely added to an allowlist.
+2. In `.github/workflows/athena-pr-tests.yml`, enable the affected job for ordinary
+   PR events and update all five required-result projections and the
+   inferential-only condition consistently. Changing the dispatch input default
+   alone does not activate PR routing. Retain explicit legacy fallback, the
+   independent guard, required context names and failure propagation.
+3. Update `scripts/harness-validation-ci.ts` help when its legacy-authority claim
+   ceases to be true. Keep help, commands, workflow callers and documentation
+   consistent; renaming the existing `qualify` command is not required.
+4. Demonstrate and document force-full execution with
+   `ATHENA_VALIDATION_MODE=full-health bun run pr:athena`, using the same mode for
+   that run's preparation and freshness/admission checks. Review and telemetry
+   remain required. This is distinct from protected global health recovery via
+   `health --recover-unknown-history`, which does not erase existing findings.
+   Also retain an explicit legacy switch or document and test the reviewed
+   policy/workflow revert for global rollback. Once scoped mode is the default,
+   unsetting the environment variable is not a rollback. Prove broad execution
+   and refusal of incompatible scoped records in the rollback exercise.
+
+Refresh generated guides through their owner and reconcile affected solution
+guidance through the compounding workflow. Historical dated evidence keeps its
+original qualification boundary. Merge and root alignment follow the normal
+delivery contract; this checklist authorizes no application deployment.
 
 ## Command And Artifact Reference
 
@@ -679,6 +941,7 @@ type and where the output lands.
 | `bun run delivery:documentation-check` | Combined solution-note and landed-change-report policy check. |
 | `bun run delivery:telemetry-record` | Export current product run telemetry after a successful gate. |
 | `bun run delivery:telemetry-check` | Enforce a current delivery-run telemetry record for substantial deliveries. |
+| `bun run delivery:telemetry-artifacts-check` | Validate changed product JSON in an isolated snapshot against its declared `refs/delivery/base`. |
 | `bun run reports:presentation:check` | Presentation contract for every `docs/reports/*.html`. |
 | `bun run docs:links:check` | Cross-references in `docs/solutions/**/*.md` resolve to servable docs. |
 | `bun run graphify:check` | Freshness gate for tracked graphify artifacts. |
@@ -689,14 +952,36 @@ type and where the output lands.
 `harness:test` selects `.test.ts` files from the top level of the repo-root
 `scripts/` directory only. The scan is non-recursive, so nested trees — including
 cloned worktrees under `worktrees/` — are never picked up. Use
-`bun run harness:test -- --dry-run` to print the selected files without running
+`bun run harness:test --dry-run` to print the selected files without running
 them.
+
+A validation plan can declare exact root-test membership with repeated
+`--test-file scripts/<name>.test.ts` arguments. Omission retains the complete
+suite; an explicit empty, missing, nested, or symlink selection is refused.
+For example, `bun run harness:test --test-file scripts/harness-test.test.ts`
+runs only that file. Selected execution accepts `--timeout <milliseconds>`
+after `--`, but refuses other runner arguments that could change membership.
+`--dry-run` prints the same validated selection without executing it.
+
+For package unit checks, the integration's exact-membership runner uses
+`node ../../scripts/harness-vitest-membership.mjs --test-file src/<name>.test.ts`
+from the package directory. It loads the existing Vitest configuration, discovers
+configured test specifications, and executes only exact matching paths. Vitest's
+ordinary filename arguments are substring filters, so they cannot establish this
+membership guarantee. The operator profile passes `--max-workers 4`; storefront
+inherits its configured default. The command projection refuses an authored test
+script it has not characterized. Node matches Vitest's executable runtime; Bun
+remains the repository's package manager. This runner does not activate affected
+validation or replace the current delivery gate on its own.
 
 The repo pins Bun through `packageManager` in `package.json` (`bun@1.1.29`
 today). Every GitHub Actions job sets up Bun with `bun-version-file: package.json`,
 so CI and local harness runs read the same declared version.
 
 ### Delivery Ladder Phases
+
+The following describes the default legacy delivery path. The opt-in qualification
+path above does not change these delivery requirements.
 
 Prepare the candidate with `pr:athena:prepare`, then establish current independent
 review evidence under AGENTS.md steps 6 and 9: obtain and submit a complete review

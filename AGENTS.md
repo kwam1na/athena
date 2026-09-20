@@ -41,6 +41,15 @@ Webapp tests are Vitest. Do not run test files with `bun test`; it lacks Vitest 
 - Added/removed/re-wrapped a public Convex function or Hono route: `bun scripts/convex-operation-admission-check.ts` must exit 0 with zero findings.
 - After modifying code files: `bun run graphify:rebuild`; `graphify:check` blocks PRs when tracked graph artifacts are stale.
 
+Affected validation remains opt-in qualification; legacy validation is the default.
+Follow [affected validation qualification](docs/harness.md#affected-validation-qualification)
+for exact membership, execution profiles, protected health, and native evidence.
+A plan is not passing evidence. Only the two qualified package typechecks use a
+no-Git profile; other checks retain full Git context. Unknown impact widens
+validation, and unavailable or relevant failing health cannot authorize omission.
+Qualification does not waive preparation, independent review, `pr:athena`, or
+pre-push verification. V26-2071 owns the separately evidenced default activation.
+
 ## Hooks and gates behave differently than defaults
 
 - Pre-commit repair is fail-closed: hooks regenerate stale docs/graph artifacts, then stop. Review and commit the repaired artifacts instead of fighting the hook.

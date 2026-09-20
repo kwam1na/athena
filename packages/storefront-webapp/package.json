@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && tsc --noEmit",
+    "build:assets": "vite build",
+    "typecheck": "tsc --noEmit",
     "serve": "vite preview",
     "start": "vite",
     "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts storefront-webapp",

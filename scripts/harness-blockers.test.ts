@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
@@ -34,6 +36,46 @@ describe("harness blockers", () => {
   const BEARER_HEADER = part("Authorization: ", "Bearer", " ");
   const BEARER_VALUE = part("abcdefghijklmnopqrstuvwxyz");
   const BEARER_VALUE_SHORT = part("abcdefghijklmnopqrstuvwx");
+
+  it.each([
+    ["harness-vitest-membership.mjs", "harness:vitest-membership"],
+    ["harness-validation-selection-guard.mjs", "harness:selection-guard"],
+  ])(
+    "accepts the actual Node refusal %s as a registry-owned blocker",
+    (file, source) => {
+      const result = spawnSync("node", [resolve(import.meta.dirname, file)], {
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(1);
+      const serialized = JSON.parse(
+        result.stderr
+          .split("\n")
+          .find((line) => line.startsWith('{"schemaVersion":1'))!,
+      );
+      const blocker = createHarnessBlocker(serialized.blockers[0]);
+      expect(blocker.source).toEqual({ kind: "command", id: source });
+      expect(serializeHarnessBlockers([blocker])).toEqual(serialized);
+    },
+  );
+
+  it("accepts the actual private dependency Python refusal", () => {
+    const result = spawnSync(
+      "python3",
+      [
+        resolve(import.meta.dirname, "harness-validation-dependencies.py"),
+        "unknown",
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.status).toBe(1);
+    const serialized = JSON.parse(result.stderr);
+    const blocker = createHarnessBlocker(serialized.blockers[0]);
+    expect(blocker.source).toEqual({
+      kind: "command",
+      id: "harness:validation-dependencies",
+    });
+    expect(serializeHarnessBlockers([blocker])).toEqual(serialized);
+  });
 
   it("requires a typed registry-owned source and non-empty remediation", () => {
     const blocker = createHarnessBlocker({
@@ -215,9 +257,9 @@ describe("harness blockers", () => {
       }),
     ];
 
-    expect(
-      formatHarnessBlockers(blockers).match(/run-prepare/g),
-    ).toHaveLength(1);
+    expect(formatHarnessBlockers(blockers).match(/run-prepare/g)).toHaveLength(
+      1,
+    );
   });
 
   it("renders command argument arrays safely without storing a shell string", () => {
@@ -304,12 +346,8 @@ describe("harness blockers", () => {
     expect(detail(`{"GITHUB_TOKEN":"${GH_PAT}"}`)).toBe(
       '{"GITHUB_TOKEN":"[REDACTED]"}',
     );
-    expect(detail(`GITHUB_TOKEN: ${GH_PAT}`)).toBe(
-      "GITHUB_TOKEN: [REDACTED]",
-    );
-    expect(detail(`apiKey=${OPENAI_KEY}`)).toBe(
-      "apiKey=[REDACTED]",
-    );
+    expect(detail(`GITHUB_TOKEN: ${GH_PAT}`)).toBe("GITHUB_TOKEN: [REDACTED]");
+    expect(detail(`apiKey=${OPENAI_KEY}`)).toBe("apiKey=[REDACTED]");
     expect(detail(AWS_KEY_ID)).toBe("[REDACTED]");
     // A quoted JSON key puts a `"` between the name and the separator, which
     // the keyword rules would otherwise refuse to cross.
@@ -352,8 +390,7 @@ describe("harness blockers", () => {
       source: { kind: "command", id: "pr:athena:delivery-run" },
       // One call site interpolates raw argv into a summary, so the guarantee
       // has to hold here and not only on the details path.
-      summary:
-        `provider failed: GITHUB_TOKEN=${GH_PAT}`,
+      summary: `provider failed: GITHUB_TOKEN=${GH_PAT}`,
       remediations: [
         {
           id: "inspect-provider",
@@ -442,7 +479,8 @@ describe("harness blockers", () => {
       ],
     });
 
-    const stored = serializeHarnessBlockers([blocker]).blockers[0]?.details ?? "";
+    const stored =
+      serializeHarnessBlockers([blocker]).blockers[0]?.details ?? "";
     const last = stored.charCodeAt(stored.length - 1);
     expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
   });
@@ -457,7 +495,9 @@ describe("harness blockers", () => {
       reproduce: ["bun", "run", "pr:athena"],
     });
 
-    expect(blocker.remediations[0]?.id).toBe("reproduce-obligation-review-green");
+    expect(blocker.remediations[0]?.id).toBe(
+      "reproduce-obligation-review-green",
+    );
     for (const remediation of blocker.remediations) {
       expect(remediation.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     }
@@ -602,7 +642,10 @@ describe("harness blockers", () => {
 
   it("has a producer for every preparation blocker source", async () => {
     // Preparation failures now originate in the installed product runtime.
-    const producerText = await readFile(new URL("../.agent-skills/current/runtime/kernel.mjs", import.meta.url), "utf8");
+    const producerText = await readFile(
+      new URL("../.agent-skills/current/runtime/kernel.mjs", import.meta.url),
+      "utf8",
+    );
     const orphaned = HARNESS_PREPARATION_SOURCE_IDS.filter(
       (id) => !producerText.includes(`"${id}"`),
     );
@@ -729,10 +772,16 @@ describe("harness usage errors", () => {
 describe("canonical plan command diagnostics", () => {
   it("renders a planning failure under the registered command source", () => {
     const blocker = createHarnessBlocker({
-      code:"validation_plan_uncovered_input",
-      source:{kind:"command",id:"harness:plan"},
-      summary:"No obligation covers a deleted input.",
-      remediations:[{id:"repair-plan",kind:"code_change",summary:"Add a covering obligation before planning."}],
+      code: "validation_plan_uncovered_input",
+      source: { kind: "command", id: "harness:plan" },
+      summary: "No obligation covers a deleted input.",
+      remediations: [
+        {
+          id: "repair-plan",
+          kind: "code_change",
+          summary: "Add a covering obligation before planning.",
+        },
+      ],
     });
     expect(formatHarnessBlockers([blocker])).toContain("command:harness:plan");
   });

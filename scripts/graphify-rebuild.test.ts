@@ -1,15 +1,24 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   GRAPHIFY_REBUILD_SNIPPET,
   normalizeGraphJsonContents,
   runGraphifyRebuild,
+  resolveGraphifyPython,
 } from "./graphify-rebuild";
 
 const tempRoots: string[] = [];
+let inheritedGraphifyPython: string | undefined;
+
+beforeEach(() => {
+  // Each fixture chooses its own mode. Private-mode cases opt in explicitly;
+  // legacy interpreter tests must not inherit the native harness selection.
+  inheritedGraphifyPython = process.env.ATHENA_GRAPHIFY_PYTHON;
+  delete process.env.ATHENA_GRAPHIFY_PYTHON;
+});
 
 async function write(relativePath: string, contents: string, rootDir: string) {
   const filePath = path.join(rootDir, relativePath);
@@ -18,20 +27,81 @@ async function write(relativePath: string, contents: string, rootDir: string) {
 }
 
 async function createFixtureRoot() {
-  const rootDir = await mkdtemp(path.join(tmpdir(), "athena-graphify-rebuild-"));
+  const rootDir = await mkdtemp(
+    path.join(tmpdir(), "athena-graphify-rebuild-"),
+  );
   tempRoots.push(rootDir);
   return rootDir;
 }
 
 afterEach(async () => {
-  await Promise.all(
-    tempRoots.splice(0).map((rootDir) =>
-      rm(rootDir, { recursive: true, force: true })
-    )
-  );
+  try {
+    await Promise.all(
+      tempRoots
+        .splice(0)
+        .map((rootDir) => rm(rootDir, { recursive: true, force: true })),
+    );
+  } finally {
+    if (inheritedGraphifyPython === undefined) delete process.env.ATHENA_GRAPHIFY_PYTHON;
+    else process.env.ATHENA_GRAPHIFY_PYTHON = inheritedGraphifyPython;
+  }
 });
 
 describe("runGraphifyRebuild", () => {
+  it("validates the original private interpreter but generates only in scratch space", async () => {
+    const rootDir = await createFixtureRoot();
+    const workspaceRoot = await createFixtureRoot();
+    await write("node_modules/.bin/python3", "private wrapper", rootDir);
+    const previous = process.env.ATHENA_GRAPHIFY_PYTHON;
+    process.env.ATHENA_GRAPHIFY_PYTHON = "private";
+    const commands: Array<{ command: string[]; cwd: string }> = [];
+    const wikiRoots: string[] = [];
+    try {
+      await runGraphifyRebuild(workspaceRoot, {
+        interpreterRootDir: rootDir,
+        spawn(command, options) {
+          commands.push({ command, cwd: options.cwd });
+          return { exited: Promise.resolve(0) };
+        },
+        writeGraphifyWikiPages: async root => { wikiRoots.push(root); },
+      });
+      expect(commands).toEqual([{
+        command: [path.join(rootDir, "node_modules/.bin/python3"), "-c", GRAPHIFY_REBUILD_SNIPPET],
+        cwd: workspaceRoot,
+      }]);
+      expect(wikiRoots).toEqual([workspaceRoot]);
+      await expect(readFile(path.join(workspaceRoot, "node_modules/.bin/python3"))).rejects.toThrow();
+      expect(await readFile(path.join(rootDir, "node_modules/.bin/python3"), "utf8")).toBe("private wrapper");
+    } finally {
+      if (previous === undefined) delete process.env.ATHENA_GRAPHIFY_PYTHON;
+      else process.env.ATHENA_GRAPHIFY_PYTHON = previous;
+    }
+  });
+
+  it.each(["missing", "external symlink"])("refuses a %s private interpreter before spawning in scratch space", async kind => {
+    const rootDir = await createFixtureRoot();
+    const workspaceRoot = await createFixtureRoot();
+    await write("author-python", "author dependency", workspaceRoot);
+    await write(".graphify_python", `${path.join(workspaceRoot, "author-python")}\n`, rootDir);
+    if (kind === "external symlink") {
+      await mkdir(path.join(rootDir, "node_modules/.bin"), { recursive: true });
+      await symlink(path.join(workspaceRoot, "author-python"), path.join(rootDir, "node_modules/.bin/python3"));
+    }
+    const previous = process.env.ATHENA_GRAPHIFY_PYTHON;
+    process.env.ATHENA_GRAPHIFY_PYTHON = "private";
+    let spawned = false;
+    try {
+      await expect(runGraphifyRebuild(workspaceRoot, {
+        interpreterRootDir: rootDir,
+        spawn() { spawned = true; return { exited: Promise.resolve(0) }; },
+      })).rejects.toThrow();
+      expect(spawned).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.ATHENA_GRAPHIFY_PYTHON;
+      else process.env.ATHENA_GRAPHIFY_PYTHON = previous;
+    }
+  });
+
   it("resets graphify cache before extraction to avoid cross-version drift", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import shutil");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("cache_dir = out / 'cache'");
@@ -50,7 +120,7 @@ describe("runGraphifyRebuild", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain(
-      "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)"
+      "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)",
     );
   });
 
@@ -60,7 +130,7 @@ describe("runGraphifyRebuild", () => {
     await write(
       ".graphify_python",
       `${path.join(rootDir, "graphify-python")}\n`,
-      rootDir
+      rootDir,
     );
 
     const commands: string[][] = [];
@@ -83,7 +153,10 @@ describe("runGraphifyRebuild", () => {
 
   it("pins PYTHONHASHSEED for deterministic graphify subprocess output", async () => {
     const rootDir = await createFixtureRoot();
-    const spawnOptions: Array<{ cwd: string; env?: Record<string, string | undefined> }> = [];
+    const spawnOptions: Array<{
+      cwd: string;
+      env?: Record<string, string | undefined>;
+    }> = [];
 
     await runGraphifyRebuild(rootDir, {
       spawn(_command, options) {
@@ -183,9 +256,9 @@ describe("runGraphifyRebuild", () => {
           hyperedges: [{ z: 1, a: 2 }, { a: 1 }],
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     await runGraphifyRebuild(rootDir, {
@@ -199,7 +272,7 @@ describe("runGraphifyRebuild", () => {
     });
 
     await expect(
-      readFile(path.join(rootDir, "graphify-out/graph.json"), "utf8")
+      readFile(path.join(rootDir, "graphify-out/graph.json"), "utf8"),
     ).resolves.toBe(`{
   "directed": false,
   "graph": {
@@ -256,8 +329,8 @@ describe("runGraphifyRebuild", () => {
             { id: "_-node", label: "underscore" },
             { id: "A-node", label: "upper" },
           ],
-        })
-      )
+        }),
+      ),
     ).toBe(`{
   "graph": {
     "A": 1,
@@ -294,7 +367,24 @@ describe("runGraphifyRebuild", () => {
             stderr: new Response("graphify exploded\n").body!,
           };
         },
-      })
+      }),
     ).rejects.toThrow("graphify exploded");
   });
+});
+
+it("uses only the private interpreter when native validation requests it", async () => {
+  const rootDir = await createFixtureRoot();
+  await write(".graphify_python", "/usr/bin/python3\n", rootDir);
+  const env = { ATHENA_GRAPHIFY_PYTHON: "private" };
+  await expect(resolveGraphifyPython(rootDir, env)).rejects.toThrow();
+  await write("node_modules/.bin/python3", "#!/bin/sh\n", rootDir);
+  expect(await resolveGraphifyPython(rootDir, env)).toBe(
+    path.join(rootDir, "node_modules/.bin/python3"),
+  );
+  expect(await readFile(path.join(rootDir, ".graphify_python"), "utf8")).toBe(
+    "/usr/bin/python3\n",
+  );
+  await expect(
+    resolveGraphifyPython(rootDir, { ATHENA_GRAPHIFY_PYTHON: "/tmp/other" }),
+  ).rejects.toThrow();
 });

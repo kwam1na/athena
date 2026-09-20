@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildRunExport, parseRunExport, type DeliveryRunExport } from "../.agent-skills/current/runtime/cli-api.mjs";
-import { computeDeliverableIdentity, createRunStore, parseDeliveryRecord, resolveRunStoreLocation, runGitDirect, gitNamespaceClearedEnvironment, type HarnessConfig } from "../.agent-skills/current/runtime/kernel.mjs";
+import { computeDeliverableIdentity, createRunStore, resolveRunStoreLocation, runGitDirect, gitNamespaceClearedEnvironment, type HarnessConfig } from "../.agent-skills/current/runtime/kernel.mjs";
 import { importHarnessConfig, wireRepo } from "./delivery-product";
 import { collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
 export { collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
@@ -109,6 +109,7 @@ export async function recordDeliveryRunTelemetry(rootDir: string, options: { run
   return { ...await writeDeliveryRunTelemetryRecord(rootDir, record, options.telemetryDir), record };
 }
 
+import { collectDeliveryRunTelemetryArtifactFindings } from "./delivery-telemetry-artifacts";
 export type DeliveryRunTelemetryFinding = { code: "telemetry_record_missing" | "telemetry_record_malformed"; message: string };
 export type DeliveryRunTelemetryCheckInput = {
   changedPaths: string[];
@@ -124,7 +125,7 @@ export type DeliveryRunTelemetryCheckInput = {
 const isTelemetryRecordPath = (repoPath: string) => repoPath.startsWith(`${DELIVERY_RUN_TELEMETRY_DIR}/`) && repoPath.endsWith(".json");
 
 export function collectDeliveryRunTelemetryFindings(input: DeliveryRunTelemetryCheckInput): DeliveryRunTelemetryFinding[] {
-  const findings: DeliveryRunTelemetryFinding[] = [];
+  const findings: DeliveryRunTelemetryFinding[] = collectDeliveryRunTelemetryArtifactFindings(input.changedPaths, input.changedRecordContents);
   const validTracked = new Set<string>();
   for (const recordPath of input.changedPaths.filter(isTelemetryRecordPath)) {
     if (!input.changedRecordContents.has(recordPath)) continue; // Deleted artifact.
@@ -132,8 +133,6 @@ export function collectDeliveryRunTelemetryFindings(input: DeliveryRunTelemetryC
     const text = JSON.stringify(value) ?? "null";
     if (parseRunExport(text).ok) {
       if (input.trackedPaths.has(recordPath)) validTracked.add(recordPath);
-    } else if (!parseDeliveryRecord(text).ok) {
-      findings.push({ code: "telemetry_record_malformed", message: `Changed telemetry artifact ${recordPath} is not a valid product run export or delivery record. Regenerate it using the installed product.` });
     }
   }
   if (input.sourceLineTotal < (input.threshold ?? DELIVERY_RUN_TELEMETRY_LINE_THRESHOLD) || (!input.ciMode && !input.localGateCompleted)) return findings;

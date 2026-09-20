@@ -5,6 +5,8 @@ import path from "node:path";
 import fixturePolicy from "./fixtures/affected-validation/health/policy.json";
 import fixtureDigest from "./fixtures/affected-validation/health/failed-digest.json";
 import {
+  createHealthApprovalVerifier,
+  HEALTH_HISTORY_CHECK_ID,
   evaluateValidationHealth,
   readValidationHealth,
   runHealthProcess,
@@ -12,6 +14,179 @@ import {
   type HealthPolicy,
   type RepairProof,
 } from "./harness-validation-health";
+import { createHash } from "node:crypto";
+
+describe("protected maintainer health approval adapter", () => {
+  test("caller cancellation reaches an in-flight health metadata read", async () => {
+    const controller = new AbortController();
+    let observed: AbortSignal | undefined;
+    const pending = readValidationHealth(fixturePolicy as HealthPolicy, {
+      signal: controller.signal,
+      requestJson: async (_endpoint, signal) => {
+        observed = signal;
+        controller.abort();
+        return new Promise(() => {});
+      },
+    });
+    const result = await pending;
+    expect(observed?.aborted).toBe(true);
+    expect(result.availability).toBe("api-unavailable");
+  });
+  const entry = {
+    findingId: "failed-unit",
+    findingRevision: "revision-1",
+    scope: { kind: "package" as const, package: "operator" },
+    revalidationRunId: 12,
+  };
+  const commit = "b".repeat(40);
+  function fixture() {
+    const body = JSON.stringify({
+      schemaVersion: "athena-health-approval/1",
+      repository: policy.repository,
+      reviewedCommit: commit,
+      classification: entry,
+    });
+    const reference = `https://github.com/${policy.repository}/pull/123#issuecomment-456@sha256:${createHash("sha256").update(body).digest("hex")}`;
+    const responses: Record<string, unknown> = {
+      [`/repos/${policy.repository}/issues/comments/456`]: {
+        id: 456,
+        body,
+        issue_url: `https://api.github.com/repos/${policy.repository}/issues/123`,
+        user: { login: "maintainer", type: "User" },
+      },
+      [`/repos/${policy.repository}/pulls/123`]: {
+        number: 123,
+        base: { repo: { full_name: policy.repository } },
+      },
+      [`/repos/${policy.repository}/collaborators/maintainer/permission`]: {
+        permission: "admin",
+        user: { login: "maintainer" },
+      },
+      [`/repos/${policy.repository}/compare/${commit}...${sha}`]: {
+        status: "ahead",
+      },
+    };
+    const calls: string[] = [];
+    const verify = createHealthApprovalVerifier(
+      policy,
+      async (endpoint, signal) => {
+        expect(signal).toBeDefined();
+        calls.push(endpoint);
+        if (!(endpoint in responses)) throw new Error("Unavailable API");
+        return responses[endpoint];
+      },
+    );
+    return {
+      responses,
+      calls,
+      verify,
+      classification: { ...entry, reference },
+      signal: new AbortController().signal,
+    };
+  }
+  test("verifies exact maintainer comment bytes, classification, PR repository and protected ancestry", async () => {
+    const f = fixture();
+    expect(await f.verify(f.classification, sha, f.signal)).toBe(true);
+    expect(f.calls).toHaveLength(4);
+  });
+  test.each(["write", "read", "none"])(
+    "%s permission is not maintainer approval",
+    async (permission) => {
+      const f = fixture();
+      f.responses[
+        `/repos/${policy.repository}/collaborators/maintainer/permission`
+      ] = { permission, user: { login: "maintainer" } };
+      expect(await f.verify(f.classification, sha, f.signal)).toBe(false);
+    },
+  );
+  test("accepts GitHub's maintain role mapped to legacy write permission, then observes revocation", async () => {
+    const f = fixture();
+    const endpoint = `/repos/${policy.repository}/collaborators/maintainer/permission`;
+    f.responses[endpoint] = {
+      permission: "write",
+      role_name: "maintain",
+      user: { login: "maintainer" },
+    };
+    expect(await f.verify(f.classification, sha, f.signal)).toBe(true);
+    f.responses[endpoint] = {
+      permission: "write",
+      role_name: "write",
+      user: { login: "maintainer" },
+    };
+    expect(await f.verify(f.classification, sha, f.signal)).toBe(false);
+  });
+  test.each(["behind", "diverged"])(
+    "reviewed repair commit %s pinned main is refused",
+    async (status) => {
+      const f = fixture();
+      f.responses[`/repos/${policy.repository}/compare/${commit}...${sha}`] = {
+        status,
+      };
+      expect(await f.verify(f.classification, sha, f.signal)).toBe(false);
+    },
+  );
+  test("changed finding revision, scope or revalidation does not inherit approval", async () => {
+    for (const patch of [
+      { findingRevision: "r2" },
+      { scope: { kind: "repo" as const } },
+      { revalidationRunId: 13 },
+    ]) {
+      const f = fixture();
+      expect(
+        await f.verify({ ...f.classification, ...patch }, sha, f.signal),
+      ).toBe(false);
+    }
+  });
+  test("edited, deleted, bot-authored and wrong-PR comments fail closed", async () => {
+    for (const patch of [
+      { body: "edited" },
+      { user: { login: "bot", type: "Bot" } },
+      {
+        issue_url: `https://api.github.com/repos/${policy.repository}/issues/999`,
+      },
+      { id: 999 },
+    ]) {
+      const f = fixture();
+      const endpoint = `/repos/${policy.repository}/issues/comments/456`;
+      f.responses[endpoint] = {
+        ...(f.responses[endpoint] as object),
+        ...patch,
+      };
+      expect(await f.verify(f.classification, sha, f.signal)).toBe(false);
+    }
+    const f = fixture();
+    delete f.responses[`/repos/${policy.repository}/issues/comments/456`];
+    expect(await f.verify(f.classification, sha, f.signal)).toBe(false);
+  });
+  test("foreign host/repository and reference without byte digest are refused before API access", async () => {
+    for (const transform of [
+      (s: string) => s.replace("github.com", "github.com.evil.test"),
+      (s: string) => s.replace(policy.repository, "other/repo"),
+      (s: string) => s.split("@sha256:")[0],
+    ]) {
+      const f = fixture();
+      expect(
+        await f.verify(
+          {
+            ...f.classification,
+            reference: transform(f.classification.reference),
+          },
+          sha,
+          f.signal,
+        ),
+      ).toBe(false);
+      expect(f.calls).toHaveLength(0);
+    }
+  });
+  test("aborted approval read cannot approve", async () => {
+    const f = fixture();
+    const controller = new AbortController();
+    controller.abort();
+    expect(await f.verify(f.classification, sha, controller.signal)).toBe(
+      false,
+    );
+  });
+});
 
 const now = Date.parse("2026-09-12T12:00:00Z");
 const sha = "a".repeat(40);
@@ -245,29 +420,216 @@ function source(
             ),
           ).toString("base64"),
         };
-      if (url.includes("/artifacts"))
+      if (url.includes("/artifacts")) {
+        const runId = Number(/\/runs\/(\d+)\/artifacts/.exec(url)?.[1] ?? 9);
         return {
           total_count: 1,
           artifacts: [
             options.artifact ?? {
-              id: 91,
+              id: runId * 10 + 1,
               name: policy.artifactName,
               expired: false,
-              workflow_run: { id: 9, head_sha: sha },
+              workflow_run: { id: runId, head_sha: sha },
               created_at: new Date(now).toISOString(),
             },
           ],
         };
+      }
       return {
         total_count: (options.runs ?? [run()]).length,
         workflow_runs: options.runs ?? [run()],
       };
     },
-    loadArtifact: async () => options.body ?? digest(),
+    loadArtifact: async (_repository: string, artifactId: number) =>
+      options.body ??
+      (artifactId === 91
+        ? digest()
+        : digest({
+            runId: Math.floor(artifactId / 10),
+            complete: false,
+            checks: [{ checkId: "operator", outcome: "cancelled" }],
+            findings: [],
+          })),
   };
 }
 
 describe("trusted health reader", () => {
+  test("completed workflow with only a partial digest remains incomplete for admission", async () => {
+    const fixture = source({ runs: [run(10), run()] });
+    const health = await readValidationHealth(policy, {
+      ...fixture,
+      now,
+      loadArtifact: async (_repo, id) =>
+        id === 101
+          ? digest({
+              runId: 10,
+              complete: false,
+              findings: [
+                {
+                  id: "partial",
+                  revision: "partial-r1",
+                  checkId: "operator",
+                  runId: 10,
+                  headSha: sha,
+                },
+              ],
+            })
+          : digest(),
+    });
+    expect(health.availability).toBe("incomplete");
+    expect(health.historyComplete).toBe(true);
+    expect(health.findings.map((f) => f.id)).toEqual(["failure-1", "partial"]);
+  });
+  test("global unknown history closes only after approved complete all-check revalidation and reopens on revocation", async () => {
+    const gap = {
+      id: "gap-8",
+      revision: "gap-revision",
+      checkId: HEALTH_HISTORY_CHECK_ID,
+      runId: 8,
+      runAttempt: 2,
+      headSha: sha,
+    };
+    const classification = {
+      schemaVersion: "athena-health-classifications/1",
+      entries: [
+        {
+          findingId: gap.id,
+          findingRevision: gap.revision,
+          reference: "explicit-maintainer-approval",
+          revalidationRunId: 9,
+          scope: { kind: "package", package: "operator" },
+        },
+      ],
+    };
+    const body = digest({
+      checks: [{ checkId: "operator", outcome: "success" }],
+      findings: [gap],
+    });
+    const approved = await readValidationHealth(policy, {
+      ...source({
+        body,
+        classification,
+        runs: [run(9, { conclusion: "success" })],
+      }),
+      now,
+    });
+    expect(approved.findings).toHaveLength(0);
+    expect(approved.closedFindings[0].finding).toMatchObject({
+      ...gap,
+      scope: { kind: "repo" },
+    });
+    const revoked = await readValidationHealth(policy, {
+      ...source({
+        body,
+        classification,
+        runs: [run(9, { conclusion: "success" })],
+      }),
+      verifyClassificationApproval: async () => false,
+      previous: approved,
+      now,
+    });
+    expect(revoked.findings[0]).toMatchObject({
+      ...gap,
+      scope: { kind: "repo" },
+    });
+    const failed = await readValidationHealth(policy, {
+      ...source({
+        classification,
+        body: digest({ findings: [gap, ...digest().findings] }),
+      }),
+      now,
+    });
+    expect(failed.findings.some((f) => f.id === gap.id)).toBe(true);
+    expect(failed.findings.find((f) => f.id === gap.id)?.scope).toEqual({
+      kind: "repo",
+    });
+    const staleRevision = {
+      ...classification,
+      entries: [{ ...classification.entries[0], findingRevision: "different" }],
+    };
+    const stale = await readValidationHealth(policy, {
+      ...source({
+        body,
+        classification: staleRevision,
+        runs: [run(9, { conclusion: "success" })],
+      }),
+      now,
+    });
+    expect(stale.findings.some((f) => f.id === gap.id)).toBe(true);
+  });
+  test("reconciles cancelled partial failures before a cumulative predecessor for producer recovery", async () => {
+    const fixture = source({
+      runs: [run(10, { conclusion: "cancelled" }), run()],
+    });
+    const health = await readValidationHealth(policy, {
+      ...fixture,
+      now,
+      loadArtifact: async (_repo, id) =>
+        id === 101
+          ? digest({
+              runId: 10,
+              complete: false,
+              findings: [
+                {
+                  id: "cancelled-failure",
+                  revision: "cancelled-r1",
+                  checkId: "operator",
+                  runId: 10,
+                  headSha: sha,
+                },
+              ],
+            })
+          : digest(),
+    });
+    expect(health.availability).toBe("incomplete");
+    expect(health.historyComplete).toBe(true);
+    expect(health.findings.map((f) => f.id)).toEqual([
+      "cancelled-failure",
+      "failure-1",
+    ]);
+  });
+  test("first cancelled run with no artifact cannot become an empty bootstrap", async () => {
+    const health = await readValidationHealth(policy, {
+      ...source({ runs: [run(10, { conclusion: "cancelled" })] }),
+      loadArtifact: async () => {
+        throw new Error("missing artifact");
+      },
+      now,
+    });
+    expect(health.availability).not.toBe("missing-seed");
+    expect(health.historyComplete).toBe(false);
+    expect(health.lastAttempt?.runId).toBe(10);
+  });
+  test("admission observes the in-progress run while producer reads only earlier history", async () => {
+    const options = {
+      ...source({
+        runs: [run(10, { status: "in_progress", conclusion: null }), run()],
+      }),
+      now,
+    };
+    const admission = await readValidationHealth(policy, options);
+    expect(admission.availability).toBe("incomplete");
+    expect(admission.lastAttempt?.runId).toBe(10);
+    expect(admission.findings).toHaveLength(1);
+    const history = await readValidationHealth(policy, {
+      ...options,
+      excludeCurrentRunId: 10,
+    });
+    expect(history.availability).toBe("available");
+    expect(history.lastAttempt?.runId).toBe(9);
+    expect(history.findings).toEqual(admission.findings);
+  });
+  test("producer can identify a genuinely empty first seed while its own run is active", async () => {
+    const health = await readValidationHealth(policy, {
+      ...source({
+        runs: [run(10, { status: "in_progress", conclusion: null })],
+      }),
+      now,
+      excludeCurrentRunId: 10,
+    });
+    expect(health.availability).toBe("missing-seed");
+    expect(health.lastAttempt).toBeUndefined();
+  });
   test("accepts bound full result and uses declared package scope for unlocalized failure", async () => {
     const health = await readValidationHealth(policy, { ...source(), now });
     expect(health.availability).toBe("available");
@@ -310,7 +672,7 @@ describe("trusted health reader", () => {
       ...source({ runs: [run(10, { conclusion: "cancelled" }), run()] }),
       now,
     });
-    expect(health.availability).toBe("available");
+    expect(health.availability).toBe("incomplete");
     expect(health.lastAttempt?.outcome).toBe("cancelled");
     expect(health.findings).toHaveLength(1);
   });
@@ -609,7 +971,7 @@ test("history pagination finds a recent complete result beyond cancelled attempt
     },
     now,
   });
-  expect(health.availability).toBe("available");
+  expect(health.availability).toBe("incomplete");
   expect(health.lastComplete?.runId).toBe(9);
   expect(health.findings).toHaveLength(1);
 });
@@ -884,7 +1246,7 @@ for (const stage of ["request", "artifact"] as const) {
     try {
       await writeFile(
         ghPath,
-        `#!/usr/bin/env bun\nawait Bun.write(${JSON.stringify(pidPath)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`,
+        `#!/bin/sh\nprintf '%s' "$$" > '${pidPath.replace(/'/g, "'\\''")}'\nexec sleep 60\n`,
       );
       await chmod(ghPath, 0o755);
       const responses = {

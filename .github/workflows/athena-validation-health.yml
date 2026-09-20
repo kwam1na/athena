@@ -1,0 +1,104 @@
+name: Athena Validation Health
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Seed a genuinely empty health history after the first deployment.
+        type: boolean
+        required: false
+        default: false
+      recover_unknown_history:
+        description: Run complete verified recovery while retaining unknown prior history as a global finding.
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: athena-validation-health
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  full-health:
+    name: Complete Validation Health Inventory
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: athena-production-validation
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ATHENA_COVERAGE_MAX_WORKERS: "2"
+      HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
+    steps:
+      - name: Checkout pinned health candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Refuse rerun that would omit previous attempt history
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          if [ "$RUN_ATTEMPT" != "1" ]; then
+            echo "Dispatch a new full-health workflow run instead of rerunning this attempt."
+            exit 1
+          fi
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install controller dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Setup private dependency interpreter
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Execute complete native inventory and publish health
+        id: produce
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOOTSTRAP: ${{ inputs.bootstrap || false }}
+          RECOVER_UNKNOWN_HISTORY: ${{ inputs.recover_unknown_history || false }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ATHENA_POS_E2E_RUN_LOCAL_BUILD: "1"
+          ATHENA_PROD_CONVEX_URL: https://colorless-cardinal-870.convex.cloud
+          ATHENA_PROD_CONVEX_SITE_URL: https://colorless-cardinal-870.convex.site
+          ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
+          ATHENA_PROD_POS_STORE_ID: nn7byz68a3j4tfjvgdf9evpt3n78kk38
+          ATHENA_PROD_POS_HUB_PATH: /wigclub/store/wigclub/pos
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$BOOTSTRAP" = "true" ]; then args+=(--bootstrap); fi
+          if [ "$RECOVER_UNKNOWN_HISTORY" = "true" ]; then args+=(--recover-unknown-history); fi
+          bun run harness:validation-ci -- health "${args[@]}"
+
+      - name: Retain cumulative trusted health digest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-validation-health
+          path: artifacts/validation-ci/health.json
+          retention-days: 90
+          if-no-files-found: warn

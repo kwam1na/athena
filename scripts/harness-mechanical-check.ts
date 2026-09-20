@@ -23,24 +23,14 @@ import { getChangedFilesForHarnessReview } from "./harness-review";
  * (lint/format/typecheck) and ~45s at prepare is far cheaper than the review
  * round a late type error would invalidate.
  */
-export const MECHANICAL_PACKAGE_SCRIPTS = [
-  "lint:convex:changed",
-  "lint:frontend:changed",
-  "lint:architecture",
-] as const;
-
-/**
- * Registry `raw` commands that qualify as mechanical. Matched by shape rather
- * than by a copied literal so a registry edit cannot silently drop the check,
- * and kept strict enough that the command can be spawned as argv with no shell:
- * anything carrying an operator, redirect, or extra argument fails the match.
- */
-const MECHANICAL_RAW_COMMAND_PATTERN =
-  /^bunx tsc --noEmit -p packages\/[a-z0-9-]+\/tsconfig\.json$/;
-
-export function isMechanicalRawCommand(command: string) {
-  return MECHANICAL_RAW_COMMAND_PATTERN.test(command.trim());
-}
+import {
+  MECHANICAL_PACKAGE_SCRIPTS,
+  isMechanicalRawCommand,
+} from "./harness-validation-command";
+export {
+  MECHANICAL_PACKAGE_SCRIPTS,
+  isMechanicalRawCommand,
+} from "./harness-validation-command";
 
 export type MechanicalPackageScript =
   (typeof MECHANICAL_PACKAGE_SCRIPTS)[number];
@@ -87,10 +77,7 @@ function normalizeRepoPath(repoPath: string) {
   // The trailing-slash strip matters: a registry entry written as
   // `packages/foo/` would otherwise build the prefix `packages/foo//`, match
   // nothing, and silently deselect that package's mechanical checks.
-  return repoPath
-    .replaceAll("\\", "/")
-    .replace(/^\.\//, "")
-    .replace(/\/$/, "");
+  return repoPath.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "");
 }
 
 function isMechanicalScript(script: string): script is MechanicalPackageScript {
@@ -109,9 +96,7 @@ function matchesTouchedPath(
       : normalizeRepoPath(packageDir),
   );
   const normalizedFile = normalizeRepoPath(changedFile);
-  return (
-    normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`)
-  );
+  return normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`);
 }
 
 /**
@@ -163,7 +148,10 @@ export function selectMechanicalCommands(
 
     for (const scenario of app.validationScenarios) {
       for (const command of scenario.commands) {
-        if (command.kind !== "raw" || !isMechanicalRawCommand(command.command)) {
+        if (
+          command.kind !== "raw" ||
+          !isMechanicalRawCommand(command.command)
+        ) {
           continue;
         }
         const normalized = command.command.trim();
@@ -266,11 +254,7 @@ export async function runHarnessMechanicalCheck(
     }
 
     logger.log(`[pr:athena] Mechanical check: ${displayName}`);
-    const exitCode = await runPackageScript(
-      rootDir,
-      workspace,
-      command.script,
-    );
+    const exitCode = await runPackageScript(rootDir, workspace, command.script);
     if (exitCode !== 0) {
       failures.push({
         command: displayName,
