@@ -1,4 +1,4 @@
-import { Product, ProductSku, SavedBagItem } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku, SavedBagItem } from "@athena/contracts";
 import { AlertCircleIcon, HeartIcon, ShoppingBagIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
@@ -8,9 +8,9 @@ import { LoadingButton } from "../ui/loading-button";
 import { ProductAttribute } from "./ProductAttribute";
 
 interface MobileProductActionsProps {
-  product: Product;
-  selectedSku: ProductSku;
-  setSelectedSku: (sku: ProductSku) => void;
+  product: PublicCatalogProduct;
+  selectedSku: PublicCatalogSku;
+  setSelectedSku: (sku: PublicCatalogSku) => void;
   handleUpdateBag: () => Promise<void>;
   handleUpdateSavedBag: () => Promise<void>;
   isUpdatingBag: boolean;

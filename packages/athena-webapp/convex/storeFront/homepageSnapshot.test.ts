@@ -573,6 +573,9 @@ describe("homepage snapshot presenter", () => {
     expect(snapshot.bestSellers[0].productSku.priceAmountMinor).toBe(12_500);
     expect(snapshot.bestSellers[0].productSku.quantityAvailable).toBe(4);
     expect(snapshot.bestSellers[0].productSku).not.toHaveProperty("price");
+    expect(snapshot.bestSellers[0].productSku).not.toHaveProperty(
+      "netPriceAmountMinor",
+    );
     expect(snapshot.featuredItems.map((item) => item.id)).toEqual([
       "featured-product",
       "featured-category",

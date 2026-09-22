@@ -3,13 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product, ProductSku } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku } from "@athena/contracts";
 import { getProductName } from "@/lib/productUtils";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { formatStoredAmount } from "@/lib/currency";
 import type { HomepageDisplayProduct } from "./homePageContent";
 
-type HomepageProduct = (Product & { skus: ProductSku[] }) | HomepageDisplayProduct;
+type HomepageProduct = (PublicCatalogProduct & { skus: PublicCatalogSku[] }) | HomepageDisplayProduct;
 type FeaturedCollection = {
   categorySlug?: string;
   name: string;

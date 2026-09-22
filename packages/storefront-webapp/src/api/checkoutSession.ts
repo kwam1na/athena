@@ -1,6 +1,6 @@
 import config from "@/config";
 import type { CheckoutOrderSubmission } from "@/components/checkout/schemas/webOrderSchema";
-import { CheckoutSession, ProductSku } from "@athena/contracts";
+import { CheckoutSession, PublicCatalogSku } from "@athena/contracts";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/checkout`;
 
@@ -225,12 +225,12 @@ export async function getPendingCheckoutSessions(): Promise<CheckoutSession[]> {
 
 export async function getCheckoutSession(
   sessionId: string,
-): Promise<CheckoutSession & { items: ProductSku[] }> {
+): Promise<CheckoutSession & { items: PublicCatalogSku[] }> {
   const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
     credentials: "include",
   });
 
-  return await parseCheckoutResponse<CheckoutSession & { items: ProductSku[] }>(
+  return await parseCheckoutResponse<CheckoutSession & { items: PublicCatalogSku[] }>(
     response,
     "Error loading session.",
   );

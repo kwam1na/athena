@@ -175,12 +175,12 @@ export const getActiveCycleCountDraftSummaryReadDefinition =
     "stockOps.cycleCountDrafts.getActiveCycleCountDraftSummary.read",
   );
 
-// Storefront product listing is served to anonymous shoppers (via the public
-// /products HTTP route → productUtil action → this query), so it opts public in.
+// The anonymous /products HTTP route calls the internal sibling
+// (`getAllInternal`) rather than this definition, so it stays closed to the
+// public actor; only an authenticated operator calls this export directly.
 export const listInventoryProductsReadDefinition = defineInventoryCatalogRead(
   "inventory/products:getAll",
   "inventory.products.getAll.read",
-  "admit",
 );
 
 export const searchProductSkusReadDefinition = defineInventoryCatalogRead(

@@ -11,9 +11,22 @@ import {
   listProductsRouteReadDefinition,
 } from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
+import {
+  projectPublicCatalogBestSellers,
+  projectPublicCatalogFeaturedItems,
+  projectPublicCatalogProduct,
+  projectPublicCatalogProducts,
+} from "../../../../storeFront/publicCatalog";
 import { getStoreDataFromRequest } from "../../../utils";
 
 const productRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+/**
+ * The catalogue reads below answer anonymous shoppers, so every response is
+ * projected to the public catalogue shape after the read. The list read goes
+ * through a Valkey cache, and projecting here rather than inside the cached
+ * action means a cache hit is projected exactly like a miss.
+ */
 
 productRoutes.get(
   "/",
@@ -45,7 +58,7 @@ productRoutes.get(
       },
     );
 
-    return c.json({ products });
+    return c.json({ products: projectPublicCatalogProducts(products) });
   }),
 );
 
@@ -79,7 +92,7 @@ productRoutes.get(
       },
     );
 
-    return c.json(res);
+    return c.json(projectPublicCatalogBestSellers(res));
   }),
 );
 
@@ -99,7 +112,7 @@ productRoutes.get(
       },
     );
 
-    return c.json(res);
+    return c.json(projectPublicCatalogFeaturedItems(res));
   }),
 );
 
@@ -131,7 +144,7 @@ productRoutes.get(
       return c.json({ error: "Product with identifier not found" }, 400);
     }
 
-    return c.json(product);
+    return c.json(projectPublicCatalogProduct(product));
   }),
 );
 

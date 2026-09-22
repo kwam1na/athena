@@ -1,8 +1,8 @@
-import { BagItem, ProductSku, SavedBagItem } from "@athena/contracts";
+import { BagItem, PublicCatalogSku, SavedBagItem } from "@athena/contracts";
 import { capitalizeWords } from "./utils";
 
 type ProductNameInput =
-  | ProductSku
+  | PublicCatalogSku
   | BagItem
   | SavedBagItem
   | {
@@ -42,27 +42,27 @@ export function getProductName(
 /**
  * Checks if a product is sold out
  */
-export function isSoldOut(sku: ProductSku): boolean {
+export function isSoldOut(sku: PublicCatalogSku): boolean {
   return sku.quantityAvailable === 0;
 }
 
 /**
  * Checks if a product has low stock
  */
-export function hasLowStock(sku: ProductSku): boolean {
+export function hasLowStock(sku: PublicCatalogSku): boolean {
   return sku.quantityAvailable !== undefined && sku.quantityAvailable <= 2;
 }
 
 /**
  * Sort SKUs by length (used for default selection)
  */
-export function sortSkusByLength(skus: ProductSku[]): ProductSku[] {
+export function sortSkusByLength(skus: PublicCatalogSku[]): PublicCatalogSku[] {
   return [...skus].sort((a, b) => (a.length ?? 0) - (b.length ?? 0));
 }
 
 export function sortSkusByAvailabilityThenLength(
-  skus: ProductSku[]
-): ProductSku[] {
+  skus: PublicCatalogSku[]
+): PublicCatalogSku[] {
   return sortSkusByLength(skus).sort((a, b) => {
     const aAvailable = (a.quantityAvailable ?? 0) > 0;
     const bAvailable = (b.quantityAvailable ?? 0) > 0;
@@ -75,7 +75,7 @@ export function sortSkusByAvailabilityThenLength(
   });
 }
 
-export function getPreferredSku(skus: ProductSku[]): ProductSku | undefined {
+export function getPreferredSku(skus: PublicCatalogSku[]): PublicCatalogSku | undefined {
   return sortSkusByAvailabilityThenLength(skus)[0];
 }
 

@@ -18,9 +18,10 @@ import { defineInventoryCatalogRead, defineReadOperation } from "./_shapes";
  *    (reservation guards) are operator-only surfaces outside the demo read
  *    grant set, so they deny the demo actor too.
  *
- * `public: "admit"` appears only on reads that anonymous storefront HTTP routes
- * reach today (see `convex/http/domains/core/routes/**`), so the anonymous
- * behaviour of those surfaces is unchanged.
+ * No definition here admits the public actor: every anonymous storefront HTTP
+ * route (`convex/http/domains/core/routes/**`) calls an internal sibling
+ * query, never one of these public-facing exports, so an anonymous Convex
+ * client cannot reach them directly.
  */
 
 type ScopeResolverCtx = OperationAdmissionCtx;
@@ -96,12 +97,12 @@ export const getBannerMessageReadDefinition = defineInventoryCatalogRead(
   "inventory.bannerMessage.get.read",
 );
 
-// Served to anonymous shoppers through GET /banner-message.
+// The anonymous GET /banner-message route calls the internal sibling
+// (`getPublicActiveInternal`), so this export stays closed to the public actor.
 export const getPublicActiveBannerMessageReadDefinition = defineIntentRead({
   functionName: "inventory/bannerMessage:getPublicActive",
   intent: "storefront.catalog.view",
   operationId: "inventory.bannerMessage.getPublicActive.read",
-  publicAccess: "admit",
   scope: { kind: "store" as const, storeIdArg: "storeId" },
 });
 
@@ -116,11 +117,11 @@ export const getBestSellerByIdReadDefinition = defineRowScopedCatalogRead({
   table: "bestSeller",
 });
 
-// Served to anonymous shoppers through GET /products/bestSellers.
+// The anonymous GET /products/bestSellers route calls the internal sibling
+// (`getAllInternal`), so this export stays closed to the public actor.
 export const listBestSellersReadDefinition = defineInventoryCatalogRead(
   "inventory/bestSeller:getAll",
   "inventory.bestSeller.getAll.read",
-  "admit",
 );
 
 // ---------------------------------------------------------------------------
@@ -149,11 +150,11 @@ export const listProductPageProvisionalSkuBindingReadDefinition =
 // inventory/categories
 // ---------------------------------------------------------------------------
 
-// Served to anonymous shoppers through GET /categories.
+// The anonymous GET /categories route calls the internal sibling
+// (`getAllInternal`), so this export stays closed to the public actor.
 export const listCategoriesReadDefinition = defineInventoryCatalogRead(
   "inventory/categories:getAll",
   "inventory.categories.getAll.read",
-  "admit",
 );
 
 export const getCategoryByIdReadDefinition = defineInventoryCatalogRead(
@@ -165,11 +166,11 @@ export const getCategoryByIdReadDefinition = defineInventoryCatalogRead(
 // inventory/colors
 // ---------------------------------------------------------------------------
 
-// Served to anonymous shoppers through GET /colors.
+// The anonymous GET /colors route calls the internal sibling (`getAllInternal`),
+// so this export stays closed to the public actor.
 export const listColorsReadDefinition = defineInventoryCatalogRead(
   "inventory/colors:getAll",
   "inventory.colors.getAll.read",
-  "admit",
 );
 
 export const getColorByIdReadDefinition = defineRowScopedCatalogRead({
@@ -222,11 +223,11 @@ export const getFeaturedItemByIdReadDefinition = defineRowScopedCatalogRead({
   table: "featuredItem",
 });
 
-// Served to anonymous shoppers through GET /products/featured.
+// The anonymous GET /products/featured route calls the internal sibling
+// (`getAllInternal`), so this export stays closed to the public actor.
 export const listFeaturedItemsReadDefinition = defineInventoryCatalogRead(
   "inventory/featuredItem:getAll",
   "inventory.featuredItem.getAll.read",
-  "admit",
 );
 
 // ---------------------------------------------------------------------------
@@ -243,11 +244,11 @@ export const getProductBySlugReadDefinition = defineInventoryCatalogRead(
   "inventory.products.getBySlug.read",
 );
 
-// Served to anonymous shoppers through GET /products/:productId.
+// The anonymous GET /products/:productId route calls the internal sibling
+// (`getByIdOrSlugInternal`), so this export stays closed to the public actor.
 export const getProductByIdOrSlugReadDefinition = defineInventoryCatalogRead(
   "inventory/products:getByIdOrSlug",
   "inventory.products.getByIdOrSlug.read",
-  "admit",
 );
 
 export const getCatalogSummaryReadDefinition = defineInventoryCatalogRead(
@@ -282,11 +283,11 @@ export const getProductSkuByIdReadDefinition = defineRowScopedCatalogRead({
 // inventory/promoCode
 // ---------------------------------------------------------------------------
 
-// Served to anonymous shoppers through GET /stores/promoCodes.
+// The anonymous GET /stores/promoCodes route calls the internal sibling
+// (`getAllInternal`), so this export stays closed to the public actor.
 export const listPromoCodesReadDefinition = defineInventoryCatalogRead(
   "inventory/promoCode:getAll",
   "inventory.promoCode.getAll.read",
-  "admit",
 );
 
 export const getPromoCodeByIdReadDefinition = defineRowScopedCatalogRead({
@@ -371,11 +372,11 @@ export const getStoreScheduleForAdminReadDefinition = storeScheduleRead(
 // inventory/subcategories
 // ---------------------------------------------------------------------------
 
-// Served to anonymous shoppers through GET /subcategories.
+// The anonymous GET /subcategories route calls the internal sibling
+// (`getAllInternal`), so this export stays closed to the public actor.
 export const listSubcategoriesReadDefinition = defineInventoryCatalogRead(
   "inventory/subcategories:getAll",
   "inventory.subcategories.getAll.read",
-  "admit",
 );
 
 export const getSubcategoryByIdReadDefinition = defineInventoryCatalogRead(

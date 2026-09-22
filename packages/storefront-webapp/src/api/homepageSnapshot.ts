@@ -9,7 +9,6 @@ export type HomepageSnapshotSkuV1 = {
   imageUrls: string[];
   currency: string;
   priceAmountMinor: number;
-  netPriceAmountMinor: number | null;
   quantityAvailable: number;
   colorName?: string | null;
   size?: string | null;

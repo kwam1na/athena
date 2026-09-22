@@ -1,4 +1,4 @@
-import { Offer, ProductSku, PromoCode } from "@athena/contracts";
+import { Offer, PublicCatalogSku, PromoCode } from "@athena/contracts";
 import { Button } from "./ui/button";
 import { getProductName } from "@/lib/productUtils";
 import { X } from "lucide-react";
@@ -15,7 +15,7 @@ import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 interface ProductReminderBarProps {
-  product: ProductSku;
+  product: PublicCatalogSku;
   isVisible: boolean;
   redeemedOffer?: Offer;
   onDismiss: () => void;

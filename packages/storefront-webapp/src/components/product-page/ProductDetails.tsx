@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { SheetTrigger } from "@/components/ui/sheet";
 import { getProductName } from "@/lib/productUtils";
 import { Link } from "@tanstack/react-router";
@@ -44,7 +44,7 @@ export function BagProduct({
   product,
   action,
 }: {
-  product: ProductSku;
+  product: PublicCatalogSku;
   action: ShoppingBagAction;
 }) {
   const actionText =

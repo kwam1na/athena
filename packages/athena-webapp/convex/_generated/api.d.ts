@@ -756,6 +756,7 @@ import type * as storeFront_onlineOrderUtilFns from "../storeFront/onlineOrderUt
 import type * as storeFront_operationAdapter from "../storeFront/operationAdapter.js";
 import type * as storeFront_payment from "../storeFront/payment.js";
 import type * as storeFront_paystackActions from "../storeFront/paystackActions.js";
+import type * as storeFront_publicCatalog from "../storeFront/publicCatalog.js";
 import type * as storeFront_reviews from "../storeFront/reviews.js";
 import type * as storeFront_rewards from "../storeFront/rewards.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
@@ -1537,6 +1538,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/operationAdapter": typeof storeFront_operationAdapter;
   "storeFront/payment": typeof storeFront_payment;
   "storeFront/paystackActions": typeof storeFront_paystackActions;
+  "storeFront/publicCatalog": typeof storeFront_publicCatalog;
   "storeFront/reviews": typeof storeFront_reviews;
   "storeFront/rewards": typeof storeFront_rewards;
   "storeFront/savedBag": typeof storeFront_savedBag;

@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -7,7 +7,7 @@ import { getProductName } from "@/lib/productUtils";
 import { formatStoredAmount } from "@/lib/currency";
 
 interface UpsellProps {
-  product: ProductSku;
+  product: PublicCatalogSku;
   isOpen: boolean;
   onClose: () => void;
 }

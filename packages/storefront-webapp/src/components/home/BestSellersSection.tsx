@@ -3,11 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductSkuCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import type { HomepageDisplaySku } from "./homePageContent";
 
 interface BestSellersSectionProps {
-  bestSellersProducts: Array<ProductSku | HomepageDisplaySku>;
+  bestSellersProducts: Array<PublicCatalogSku | HomepageDisplaySku>;
   origin: string;
 }
 
@@ -66,7 +66,7 @@ function ProductSkuGrid({
   formatter,
   origin,
 }: {
-  products: Array<ProductSku | HomepageDisplaySku>;
+  products: Array<PublicCatalogSku | HomepageDisplaySku>;
   formatter: any;
   origin: string;
 }) {

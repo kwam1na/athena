@@ -1,4 +1,4 @@
-import { ProductSku, PromoCode } from "@athena/contracts";
+import { PublicCatalogSku, PromoCode } from "@athena/contracts";
 import { Button } from "./ui/button";
 import { getProductName } from "@/lib/productUtils";
 import { X } from "lucide-react";
@@ -13,7 +13,7 @@ import { postAnalytics } from "@/api/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface ProductActionBarProps {
-  product: ProductSku;
+  product: PublicCatalogSku;
   isVisible: boolean;
   onDismiss: () => void;
   promoCode?: PromoCode;

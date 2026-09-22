@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useParams, useSearch } from "@tanstack/react-router";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { BagItem, ProductSku, SavedBagItem } from "@athena/contracts";
+import { BagItem, PublicCatalogSku, SavedBagItem } from "@athena/contracts";
 import { useEffect, useRef, useState } from "react";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
@@ -40,7 +40,7 @@ export function useProductPageLogic() {
   const promoCodeItem = promoCodeItems?.[0]?.productSku;
 
   const { variant } = useSearch({ strict: false });
-  const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
+  const [selectedSku, setSelectedSku] = useState<PublicCatalogSku | null>(null);
   const lastTrackedProductView = useRef<string | null>(null);
 
   const isPromoCodeItemInBag = bag?.items?.find(
@@ -51,7 +51,7 @@ export function useProductPageLogic() {
   useEffect(() => {
     if (product && variant) {
       const selectedSku = product?.skus?.find(
-        (sku: ProductSku) => sku.sku === variant,
+        (sku: PublicCatalogSku) => sku.sku === variant,
       );
       selectedSku && setSelectedSku(selectedSku);
     } else if (product && !selectedSku) {

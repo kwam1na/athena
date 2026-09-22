@@ -1,6 +1,6 @@
 import config from "@/config";
 import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
-import { FeaturedItem, Product } from "@athena/contracts";
+import { FeaturedItem, PublicCatalogProduct } from "@athena/contracts";
 
 const buildQueryString = (params?: FilterParams) => {
   if (!params) return null;
@@ -21,7 +21,7 @@ export async function getAllProducts({
   filters,
 }: {
   filters?: FilterParams;
-}): Promise<Product[]> {
+}): Promise<PublicCatalogProduct[]> {
   const queryString = buildQueryString(filters);
   const url = `${getBaseUrl()}${queryString ? `?${queryString}` : ""}`;
   const response = await fetch(url, {
@@ -37,7 +37,7 @@ export async function getAllProducts({
   return res.products;
 }
 
-export async function getProduct(productId: string): Promise<Product> {
+export async function getProduct(productId: string): Promise<PublicCatalogProduct> {
   const params = {
     isVisible: "true",
   };
@@ -56,7 +56,7 @@ export async function getProduct(productId: string): Promise<Product> {
   return res;
 }
 
-export async function getBestSellers(): Promise<Product[]> {
+export async function getBestSellers(): Promise<PublicCatalogProduct[]> {
   const response = await fetch(`${getBaseUrl()}/bestSellers`, {
     credentials: "include",
   });
