@@ -461,22 +461,298 @@
         "durationMs": 2663164,
         "digest": "c7b816bdaa07e6b64b9d2a2022f741c69b1c971e994138f25c63b299370692d8"
       }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 19,
+      "at": "2026-09-22T16:31:35Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1178
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 20,
+      "at": "2026-09-22T16:31:43Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 7795
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 21,
+      "at": "2026-09-22T16:31:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1225
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 22,
+      "at": "2026-09-22T16:31:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 6629
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 23,
+      "at": "2026-09-22T16:33:17Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 5989
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 24,
+      "at": "2026-09-22T17:35:21Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "policy",
+        "durationMs": 621
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 25,
+      "at": "2026-09-22T17:38:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 158851
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 26,
+      "at": "2026-09-22T17:38:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 763
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 27,
+      "at": "2026-09-22T17:38:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 572
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 28,
+      "at": "2026-09-22T17:39:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 589
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 29,
+      "at": "2026-09-22T17:39:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 683
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 30,
+      "at": "2026-09-22T17:39:50Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "1e074b9369044a7a65fe4b0aadc9a6932296a6ec",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Anonymous catalogue routes and Convex queries no longer expose internal product/SKU fields",
+          "acceptanceCriteria": [
+            "V26-2093 AC1: Anonymous responses at all five catalogue routes carry none of the dropped fields, on a cache hit and a miss.",
+            "V26-2093 AC2: A schema-enumeration test requires every key of productSchema and productSkuSchema to be in the keep or drop set.",
+            "V26-2093 AC3: Storefront listing, detail, bag and homepage render unchanged.",
+            "V26-2094 AC1: An anonymous Convex client calling any of the nine catalogue queries gets a thrown denial.",
+            "V26-2094 AC2: Authenticated operator calls still admit.",
+            "V26-2094 AC3: Admission check at zero findings; regenerated caller-table and downstream-writes documents committed."
+          ],
+          "finishLine": "PR merged with gates green"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "1e074b9369044a7a65fe4b0aadc9a6932296a6ec",
+        "candidateBinding": {
+          "deliverableDigest": "7d85e6c95a80b448e52a6c0a24d0172ced1d0e5e91724eb04cbf4f639f553393",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "23b5e26bd335f81eb358e208f41278e8e36edf5cd236e25e3f20ccc82784a586"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 31,
+      "at": "2026-09-22T18:20:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 2414256,
+        "digest": "da67c873d33246aebe97a32d0dfb02a90679902b5223b6cbb178d34fca9b32c2"
+      }
     }
   ],
   "summary": {
     "ticket": "v26-2093-2094",
     "open": true,
     "startedAt": "2026-09-22T15:28:59Z",
-    "lastAt": "2026-09-22T16:31:32Z",
-    "durationSeconds": 3753,
+    "lastAt": "2026-09-22T18:20:05Z",
+    "durationSeconds": 10266,
     "phases": {
-      "implementationSeconds": 3753,
+      "implementationSeconds": 10266,
       "reviewSeconds": 0,
       "tailSeconds": 0,
       "rounds": 0,
       "gate": {
-        "totalMs": 2668219,
-        "counted": 2,
+        "totalMs": 5082475,
+        "counted": 3,
         "unreadable": 0,
         "unseen": false
       }
@@ -490,6 +766,10 @@
       "P3": 0
     },
     "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    },
+    "record": {
       "outcome": "ok",
       "writer": "cli"
     }
@@ -508,7 +788,8 @@
     "status": "incomplete",
     "present": [
       "run.started",
-      "command.completed:gate"
+      "command.completed:gate",
+      "command.completed:record"
     ],
     "missing": [
       "ticket.read",
@@ -516,17 +797,22 @@
       "lens.selected",
       "review.round.opened",
       "review.round.closed",
-      "command.completed:record",
       "pr.opened",
       "run.ended"
     ],
     "violations": [
-      "gate-before-closed-round"
+      "gate-before-closed-round",
+      "record-before-gate"
     ],
     "explanations": [
       {
         "violation": "gate-before-closed-round",
-        "because": "the governing gate completion at seq 18 has no closed round this row accepts: the journal carries no round whose latest opening is closed by its own latest close, so no closed round governs",
+        "because": "the governing gate completion at seq 31 has no closed round this row accepts: the journal carries no round whose latest opening is closed by its own latest close, so no closed round governs",
+        "blocksAdmission": false
+      },
+      {
+        "violation": "record-before-gate",
+        "because": "the governing record completion at seq 20 precedes the governing gate completion at seq 31, so the record was written before the gate it reports",
         "blocksAdmission": false
       }
     ]
