@@ -22,6 +22,14 @@ import { defineReadOperation } from "./_shapes";
  *
  * Reads write nothing and are never captured, and the shared demo is denied
  * throughout, so no read-intent grant is widened here.
+ *
+ * ONE READ WRITES, and only about itself. The assistant catalogue search
+ * stamps its own credential's `lastUsedAt` after the response is built, at
+ * most once a quarter hour, through a mutation that takes the token id and
+ * nothing else. It is an observability side channel for the operator who
+ * minted the token, not part of the read: the query text never reaches it,
+ * a failed stamp never fails the response, and no other read on this surface
+ * writes anything.
  */
 
 function publicReadRoute(args: {
@@ -45,6 +53,7 @@ function publicReadRoute(args: {
       normalUser: args.normalUser ?? ("admit" as const),
       sharedDemo: "deny" as const,
       storefrontCustomer: "deny" as const,
+      catalogReader: "deny" as const,
       public: "admit" as const,
     },
   });
@@ -68,6 +77,7 @@ function customerReadRoute(args: {
       normalUser: "deny" as const,
       sharedDemo: "deny" as const,
       storefrontCustomer: "admit" as const,
+      catalogReader: "deny" as const,
       public: "deny" as const,
     },
   });
@@ -89,6 +99,7 @@ function operatorReadRoute(args: {
       normalUser: "admit" as const,
       sharedDemo: "deny" as const,
       storefrontCustomer: "deny" as const,
+      catalogReader: "deny" as const,
       public: "deny" as const,
     },
   });
@@ -222,6 +233,32 @@ export const getHarnessWaiverApprovalRouteReadDefinition = publicReadRoute({
   path: "/harness/waivers/requests/:approvalId",
 });
 
+// --- assistant catalogue ----------------------------------------------------
+
+/**
+ * The one read a token-bearing catalogue reader may make.
+ *
+ * It declares the store scope because the catalogue-reader adapter needs
+ * something to cross-check a `?storeId=` argument against; the admitted store
+ * still comes from the token ROW, so an argument naming another store is
+ * refused rather than honoured. Every other actor is denied, including the
+ * anonymous one: this surface answers a credential, never a browser.
+ */
+export const assistantCatalogSearchRouteReadDefinition = defineReadOperation({
+  kind: "http_read" as const,
+  route: { method: "GET", path: "/assistant-catalog/search" },
+  operationId: "http.core.assistantCatalog.search",
+  access: { kind: "read" as const, intent: "storefront.catalog.view" },
+  scope: { kind: "store" as const, storeIdArg: "storeId" },
+  actors: {
+    normalUser: "deny" as const,
+    sharedDemo: "deny" as const,
+    storefrontCustomer: "deny" as const,
+    catalogReader: "admit" as const,
+    public: "deny" as const,
+  },
+});
+
 // --- inert operator stubs ---------------------------------------------------
 
 export const getOrganizationRouteReadDefinition = operatorReadRoute({
@@ -257,6 +294,7 @@ export const HTTP_CORE_READ_DEFINITIONS: readonly OperationReadDefinition[] =
     listRedeemedPromoCodesRouteReadDefinition,
     whatsappWebhookVerificationRouteReadDefinition,
     getHarnessWaiverApprovalRouteReadDefinition,
+    assistantCatalogSearchRouteReadDefinition,
     getOrganizationRouteReadDefinition,
     listMyOrganizationsRouteReadDefinition,
   ];

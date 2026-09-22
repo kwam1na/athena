@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>A token-resolved catalogue read for a caller that is not a person</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="09942e4c54ed8c40f36db6f9b9bb640ffdc875fd3edb601e2841fc49e3966b4d">
+  <header data-report-section="header">
+    <h1>A token-resolved catalogue read for a caller that is not a person</h1>
+    <p>A store can hand an external assistant a revocable credential, and that credential — not a cookie, not an argument — decides which catalogue is read and how little of it comes back.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Four tickets, one integration PR</li>
+      <li>Deploy then backfill then mint</li>
+      <li>No deployment in this delivery</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate; gate and review pending at authoring time</dd>
+      <dt>Tickets</dt><dd>V26-2095 (token), V26-2096 (index and backfill), V26-2097 (actor kind, claim, adapter), V26-2098 (endpoint)</dd>
+      <dt>Branch</dt><dd>codex/v26-2095-catalog-access-token</dd>
+      <dt>Base</dt><dd>origin/main 3d7a4ff7</dd>
+    </dl>
+  </header>
+
+  <section data-report-section="summary">
+    <h2>What landed</h2>
+    <p>Hey Lobby, an external front-desk assistant, can now answer "do you have a burgundy bob wig?" from a store's real catalogue. It does so by presenting a per-store bearer token on <code>GET /assistant-catalog/search</code> and receiving a closed <code>assistant_catalog.v1</code> projection of the live, visible catalogue — and nothing else.</p>
+    <p>Four pieces land together because they are only safe together: a hashed, revocable token table with its store-configuration section; a fifth admission actor kind, <code>catalog_reader</code>, with the ingress claim and adapter that resolve it; a second search projection and index that never contained a barcode or an invisible row; and the endpoint that ties them into one answer.</p>
+    <p>They ship as one PR because all four regenerate the same admission-checker documents, harness indexes and graph artifacts. Ticket-level scope stays in Linear.</p>
+  </section>
+
+  <section data-report-section="problem">
+    <h2>Why none of the existing pieces would do</h2>
+    <p>Every credential Athena could issue belonged to a person. Every catalogue read was shaped for a browser session. And the one search index over the catalogue — <code>searchText</code> on <code>productSkuSearch</code> — contains barcodes and covers draft and hidden rows.</p>
+    <p>That last point is the sharp one. An endpoint that searched the existing index and then filtered its results would still have computed the <em>ranking</em> over private data. A caller could send a guessed barcode and learn from the shape of the answer — the order, the <code>hasMore</code>, the <code>exhaustive</code> — whether the guess was real. Filtering the output does not close an oracle that lives in the input.</p>
+    <p>Two logging hazards sat alongside it. The admission rail spreads a request's whole query string into <code>operationArgs</code>, which is recorded, so a shopper's sentence sent as <code>?q=</code> becomes a stored record. And a Convex <code>ArgumentValidationError</code> prints the value it rejected, so a validator strict enough to reject a malformed question is itself a way to write that question into a log line.</p>
+  </section>
+
+  <section data-report-section="mental-model">
+    <h2>Ingress identity, not delegated authority</h2>
+    <p>Athena's rail already knows two ways a caller can appear. A <em>delegated</em> caller acts for a signed-in operator and is modelled with a derived grant. An <em>ingress</em> caller presents its own credential and acts for itself — the storefront cookie claim is the existing example.</p>
+    <p>The assistant is the second kind. It holds a credential the shop issued to it, not a borrowed operator session. So it gets an actor kind, <code>catalog_reader</code>, sitting between <code>storefront_customer</code> and <code>public</code> in the adapter order. The doctrine note that says "add a caller kind by giving it a derived grant, not by adding an actor kind" is amended in this same change to scope that bullet to delegated callers, which is what it was written about.</p>
+    <p>The second model to hold: <strong>the private data is not filtered out, it was never in</strong>. The assistant's candidate set comes from an index built without barcodes and pre-filtered to visible rows. A real barcode and an invented one are indistinguishable to it because neither is in the haystack.</p>
+  </section>
+
+  <section data-report-section="before-after">
+    <h2>The path a question takes</h2>
+    <p><strong>Before.</strong> There was no path. The nearest thing was <code>searchProductSkus</code>, a staff-facing lookup that resolves a SKU by document id, by barcode or by anything else on the row, behind an operator session.</p>
+    <p><strong>After.</strong> The question arrives in the <code>X-Assistant-Query</code> header, with only <code>limit</code> in the URL. The rail extracts the ingress claim, hashing <code>X-Assistant-Token</code> only when it matches the token shape. The catalogue-reader adapter looks that hash up, requires an active row, and takes the store from the row itself. The route then applies every bound on the question — 2,400 raw bytes, a guarded decode, control characters collapsed, 200 codepoints, lone surrogates dropped — before calling an internal query whose arguments are a plain string and a number. That query reads <code>assistant_search</code> filtered to the admitted store and <code>assistantVisible: true</code>, hydrates only the SKUs that can appear, and returns the closed validator. The response goes out with <code>Cache-Control: no-store, private</code>.</p>
+    <p>A question that cannot be read is answered rather than reported: 200, no matches, <code>exhaustive: false</code>. The assistant then says the shop's listing does not cover it, which is true, instead of announcing an outage to a shopper.</p>
+  </section>
+
+  <section data-report-section="key-files">
+    <h2>Where to look</h2>
+    <table>
+      <thead>
+        <tr><th>File</th><th>What it holds</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>convex/schemas/inventory/catalogAccessToken.ts</code></td><td>The token row: <code>tokenHash</code>, <code>status</code>, <code>label</code>, <code>lastUsedAt</code>; indexes <code>by_tokenHash</code> and <code>by_storeId_status</code>.</td></tr>
+        <tr><td><code>convex/inventory/catalogAccess.ts</code></td><td>Mint, revoke, list and <code>touch</code>. Raw value returned once; five active per store; revoke compares the row's own <code>storeId</code> against the admitted constraint.</td></tr>
+        <tr><td><code>convex/platform/storefrontCookieSignature.ts</code></td><td><code>sha256Hex</code>, pinned against <code>crypto.subtle.digest</code>, shared by ingress and the mint path.</td></tr>
+        <tr><td><code>convex/http/utils.ts</code></td><td>The ingress claim extractor: pattern-check then hash <code>X-Assistant-Token</code>, independent of cookies. Verifies nothing.</td></tr>
+        <tr><td><code>convex/inventory/catalogAccessAdapter.ts</code></td><td>Claim to actor: absent is <code>not_applicable</code>; denied kind is terminal before any lookup; otherwise hash lookup, active row, store constraint, <code>lastUsedAt</code> in provenance.</td></tr>
+        <tr><td><code>convex/operationAdmission/types.ts</code>, <code>readDefinitions.ts</code>, <code>definitions.ts</code>, <code>rail.ts</code></td><td>The fifth actor kind, the required <code>actors.catalogReader</code> on every <code>http_read</code> definition, and the typed rejection body keyed on <code>decision.adapter</code>.</td></tr>
+        <tr><td><code>convex/inventory/skuSearch.ts</code>, <code>convex/schema.ts</code></td><td><code>assistantSearchText</code> (barcode-free) and <code>assistantVisible</code> on the projection, plus the <code>assistant_search</code> index filtered by store and visibility.</td></tr>
+        <tr><td><code>convex/migrations/backfillProductSkuSearchAssistantFields.ts</code></td><td>The hand-run backfill and its count query. Paginates by <code>by_storeId</code>, honours <code>dryRun</code>, creates missing projection rows, leaves the POS register revision alone.</td></tr>
+        <tr><td><code>convex/http/domains/core/routes/assistantCatalog.ts</code></td><td>The route. Every bound on the question is applied here, before the internal query is called.</td></tr>
+        <tr><td><code>convex/storeFront/assistantCatalog.ts</code></td><td>The internal search and the closed <code>assistant_catalog.v1</code> response validator with its size and count caps.</td></tr>
+        <tr><td><code>convex/http/domains/core/routes/assistantHeaderLogging.test.ts</code></td><td>A source scan keeping any <code>x-assistant-*</code> header value out of <code>console.*</code>, which also proves the scanner bites.</td></tr>
+        <tr><td><code>src/components/store-configuration/components/CatalogAccessView.tsx</code></td><td>The operator surface: label, created, last used, status, mint-once and revoke.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="changes">
+    <h2>What changed, and what deliberately did not</h2>
+    <p><strong>A presented credential is recognised identity.</strong> The storefront adapter treats an unrecognised cookie as "not my caller" and lets the request continue anonymously. The catalogue-reader adapter does not. A token was chosen and sent, so a route that denies the kind refuses terminally before any lookup, and a withdrawn credential cannot fall through to whatever anonymous callers may read. The refusal body <code>{"code":"reference_token_rejected"}</code> is pinned byte for byte and selected from typed data — which adapter refused — never from message text.</p>
+    <p><strong>A store scope does not bind a row.</strong> <code>resolveOperationScope</code> only echoes <code>args.storeId</code>, so revoke loads the target row and compares its own <code>storeId</code> to the admitted constraint before touching it. Authorization is two-layered: the rail clamps the claimed store, then the handler requires <code>full_admin</code> membership in that store's organization.</p>
+    <p><strong>The search is a sibling of <code>searchProductSkus</code>, not a caller of it.</strong> It keeps the SKU-code exact lookups and drops the imported codes that are really barcodes, so nothing the shop keeps to itself can move a ranking. <code>exhaustive</code> is <code>!candidateOverflow</code>; tokens of two characters or fewer and a short stop list are dropped first, because Convex text search is an OR over tokens and "do you have any of the" would otherwise match the whole shop and then claim to have covered it.</p>
+    <p><strong>A read writes exactly one thing, about itself.</strong> <code>lastUsedAt</code> is stamped after the response is built, in a <code>try/catch</code>, at most once a quarter hour, through a mutation whose only argument is the token id. A failed stamp never costs the shopper an answer. The precedent is <code>GET /storefront</code>, which mints a guest inside an <code>admitHttpRead</code>; both the definition and the rail's header comment record the side channel so "a read writes nothing" is not quietly false.</p>
+    <p><strong>Both projection fields are optional</strong> so the schema pushes before the backfill runs, and <code>registerCatalogProjectionsEqual</code> ignores them so the POS register revision does not bump for a field the register does not read.</p>
+    <p><strong>Not in scope, on purpose.</strong> Per-token rate limiting and the shared-demo baseline rows that lack the new projection fields until the next baseline bump are both recorded plan deferrals, not oversights.</p>
+  </section>
+
+  <section data-report-section="failure-boundaries">
+    <h2>The window between deploy and backfill</h2>
+    <p>Order matters: <strong>deploy, then backfill, then mint</strong>. Between the deploy and the backfill the two projection fields are absent from existing rows, so the index is incomplete — and an incomplete index still returns <code>exhaustive: true</code>, because exhaustive describes the search, not the corpus. A token minted in that window would let the assistant claim it had covered a catalogue it had not.</p>
+    <p>Athena has one store, so the window is closed by hand rather than by machinery: run the dry run, apply the backfill, run the count query until rows carrying <code>assistantSearchText</code> equal the store's SKU rows, and only then mint. The exact commands live in the projection-backfill solution note, not in <code>deploy-vps.sh</code>, because they are run once by a person who reads the count.</p>
+    <p>Revoking is the inverse and needs no deploy. The next call answers 403 with the rejection body.</p>
+  </section>
+
+  <section data-report-section="validation">
+    <h2>Validation and review</h2>
+    <p>Focused sensors on the delivered surface: 227 tests across 17 files green (route, response validator, header-logging scan, <code>skuSearch</code>, catalogue access and its adapter, HTTP utils, the migrations directory, the SHA-256 pin, and the delegated-admission actor-kind pins).</p>
+    <p>The admission-rail suite — <code>operationAdmission</code>, <code>sharedDemo</code>, <code>storeFront</code>, <code>platform</code>, <code>http</code>, <code>inventory</code> and the agent-capability ports — is 1,571 tests across 137 files green, including the coverage test that proves every ingress is admitted, every ingress-bearing file belongs to exactly one ownership unit, and the generated caller table is current.</p>
+    <p><code>bun scripts/convex-operation-admission-check.ts</code> reports zero findings over 241 mutations, 250 queries, 35 actions, 45 HTTP and 50 HTTP-read ingresses. <code>bun run harness:test</code> is 1,923 tests green (the delivery scripts changed), <code>bun run harness:check</code>, <code>bun run audit:convex</code>, <code>bun run lint:convex:changed</code> and the webapp project typecheck all pass.</p>
+    <p>Two defects were found and fixed inside this delivery. The first, before review: the route's control-character class had been written with the literal characters it matches, one of which is NUL, so git read the whole source file as binary — no diff, no review, no patch. The escaped form matches the same range.</p>
+    <p>The second came out of review round one, and it was the interesting one. The match limit was spent while bucketing <em>candidates</em>, before visibility and the code-equals-barcode rule were applied at hydration — so a hidden SKU's code could take a match slot from a product that could be answered, shorten the answer and flip <code>hasMore</code>. The index kept the hidden row out of the results, and the limit let it back in through the count. The limit now counts products that can actually be answered, and the hidden-code equivalence test runs at the limit with a code that shares a token with a visible product, which is the only arrangement in which the two answers could ever have diverged.</p>
+    <p>Round two took the same oracle one step further, and this is the part worth remembering. Fixing the match limit was not enough, because a limit is not the only thing a hidden row can be counted against. Two more paths were still spending on candidate rows rather than on answers. A product is allowed eight options, and that cap was also applied before hydration, so a hidden SKU sitting in a product that had eight visible matching SKUs pushed a visible option out and set <code>truncated</code>. And an exact SKU-code match hoists its product to the front of the answer, which was granted from the raw row — so guessing a hidden SKU's code moved its product to first place, and the <em>ordering</em> confirmed the guess even though the body did not. Both are now resolved the same way the match limit was: the exact candidates are hydrated before they are allowed to rank anything, and the option cap counts options rather than candidates. Hydration is memoised, so a SKU reached by both the exact lookup and the text index is still read once.</p>
+    <p>The general shape behind all three: the projection keeps private rows out of the body, but every quantity derived from the candidate set — a count, a cap, a position — is a second channel that has to be spent after hydration, not before. Three tests pin it, each verified to fail against the code it protects: the code that is hidden inside a crowded product, the code that overflows the option cap with nothing to show, and the row the index has not yet caught up with after a hide.</p>
+    <p>Round three approved the result and left one observation worth acting on, which all three reviewers reached independently: the option cap was pinned only in the negative. Three cases proved a hidden or stale row must not be counted, and none proved the cap fires at all — deleting it, weakening <code>&gt;=</code> to <code>&gt;</code>, or dropping its <code>truncated</code> all left the suite green. A fourth case now pins the allow side: nine visible SKUs under one product return eight options and say the answer was cut. It is red against all three of those mutations. The lesson generalises past this delivery: a limit needs a case on both sides, because a test that only proves nothing was wrongly counted cannot tell a working cap from a deleted one.</p>
+    <p>Round one also closed three coverage gaps: the text index's read window now has a case pinning <code>exhaustive: false</code>; the backfill is tested against the input it actually meets in production, a projection row that exists and predates the two assistant keys; and the ingress claim's "without hashing it" is asserted on the call rather than only on the return.</p>
+    <p>Two residual risks the reviewers raised are filed as follow-ups rather than grown into this delivery: V26-2110, because the backfill's completeness gate counts SKUs whose projection row can never exist and so could hang forever on a store with an orphan SKU; and V26-2111, because <code>projectionsEqual</code> compares stringified documents and is therefore key-order sensitive, which may mean a row that gains a field by patch never reports <code>unchanged</code> again. The second is written as characterization-first: the behaviour on the real backend has to be established before it is changed.</p>
+    <p>The sibling delivery that closes the anonymous catalogue boundary (V26-2093 and V26-2094) merged first, so this branch was rebased onto it. Both touch the read-definition files, because this delivery makes <code>actors.catalogReader</code> required on every <code>http_read</code> definition and the sibling added and reshaped definitions in the same place. Git auto-merged all source; only the regenerated artifacts needed resolving, and those were taken from the new base and rebuilt. A fourth review round verified the integration rather than the design.</p>
+    <p>The canonical <code>pr:athena</code> gate, merge and root alignment follow this report; no production deploy is part of this delivery.</p>
+  </section>
+
+  <section data-report-section="guidance">
+    <h2>Next time</h2>
+    <p>When a new caller kind arrives, ask first whether it acts for a person or for itself. Delegated callers get a derived grant; a caller holding its own credential gets an actor kind, and the rail requires every <code>http_read</code> definition to state its answer for that kind rather than defaulting one.</p>
+    <p>Because <code>requireValidReadDefinition</code> runs per request, a validator that newly requires a field and the helpers that supply it must land in the same commit. There is no half-migrated state that answers requests.</p>
+    <p>When caller-supplied free text must reach a backend, put it in a header and bound it in the route. The rail records the query string, and a validator error prints what it rejected; both hazards are closed only by bounding before the call, never by a stricter validator.</p>
+    <p>When a projection table gains a field, make it optional, push the schema, backfill by hand with a dry run and a count query, and only then turn on the thing that depends on it.</p>
+  </section>
+
+  <section data-report-section="quiz" data-quiz-pass-threshold="5">
+    <h2>Comprehension quiz</h2>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A hidden SKU never appears in the response body. Review still found three ways its existence could be confirmed. What did all three have in common?</p>
+        <ol data-quiz-options>
+          <li>They all read the hidden row's fields and leaked one of them into an error message.</li>
+          <li data-quiz-correct>They all spent a bounded resource — the match limit, the per-product option cap, the first position in the ordering — on a candidate row before it had been hydrated and checked, so a quantity derived from the candidate set answered a question the body refused.</li>
+          <li>They all relied on the projection being stale relative to the canonical rows.</li>
+          <li>They all required the caller to hold a revoked token.</li>
+        </ol>
+        <p data-quiz-explanation>Keeping private rows out of the body is only half the job. Every count, cap and position derived from the candidate set is a second channel, and each has to be spent after hydration rather than before.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was filtering barcodes out of the existing search results judged insufficient?</p>
+        <ol data-quiz-options>
+          <li>Filtering would have been too slow for the response budget.</li>
+          <li data-quiz-correct>The ranking, <code>hasMore</code> and <code>exhaustive</code> would still have been computed over private data, so a guessed barcode could be confirmed by the shape of the answer.</li>
+          <li>The existing index does not store barcodes at all.</li>
+          <li>Convex does not allow filtering a search result set.</li>
+        </ol>
+        <p data-quiz-explanation>An oracle in the candidate set survives any filtering of the output. The fix had to change what enters the search, which is why a second index exists.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the shopper's question travel in a header rather than the query string?</p>
+        <ol data-quiz-options>
+          <li>Headers can carry more bytes than a URL.</li>
+          <li>The query string is reserved for admission arguments by convention.</li>
+          <li data-quiz-correct>The rail spreads the query string into <code>operationArgs</code>, which is recorded, so a question sent as <code>?q=</code> would be stored and logged.</li>
+          <li>Header values are encrypted in transit while query strings are not.</li>
+        </ol>
+        <p data-quiz-explanation>Only <code>limit</code> is in the URL. The question is read in the route after admission, so it never enters the recorded arguments.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are the question's length and character bounds applied in the route instead of in the internal query's validator?</p>
+        <ol data-quiz-options>
+          <li>Convex validators cannot express a length bound.</li>
+          <li data-quiz-correct>A Convex <code>ArgumentValidationError</code> prints the value it rejected, so a strict validator on the question would itself write the question into a log.</li>
+          <li>Route-level checks run faster than validator checks.</li>
+          <li>The internal query is shared with the staff-facing search.</li>
+        </ol>
+        <p data-quiz-explanation>Bounding first keeps the internal query's arguments a plain string and number, so no validator can ever echo the text.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A valid catalogue token is presented to a route whose definition sets <code>catalogReader: "deny"</code>. What happens?</p>
+        <ol data-quiz-options>
+          <li>The adapter returns <code>not_applicable</code> and the request continues as an anonymous caller.</li>
+          <li>The token is looked up, found active, and then refused.</li>
+          <li data-quiz-correct>The adapter refuses terminally before any lookup, because a presented credential is recognised identity and must not fall through to the anonymous adapter.</li>
+          <li>The rail admits it and the handler decides.</li>
+        </ol>
+        <p data-quiz-explanation>Falling through is how a withdrawn credential keeps reading whatever anonymous callers may read. The refusal is terminal and its body is chosen from typed data.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Revoke is called with another organisation's token id while admitted on this store. What stops it?</p>
+        <ol data-quiz-options>
+          <li>The store scope constraint, which binds the addressed row.</li>
+          <li data-quiz-correct>An explicit handler check, because <code>resolveOperationScope</code> only echoes <code>args.storeId</code> and never binds a row addressed by id.</li>
+          <li>The <code>by_tokenHash</code> index, which is organisation-scoped.</li>
+          <li>Nothing — cross-organisation revoke is permitted for <code>full_admin</code>.</li>
+        </ol>
+        <p data-quiz-explanation>The handler compares the loaded row's own <code>storeId</code> against the admitted constraint and raises <code>scope_denied</code>; the row stays active.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why must the store's token be minted only after the backfill's count query reports equality?</p>
+        <ol data-quiz-options>
+          <li>The mint mutation reads <code>assistantSearchText</code> and would fail before the backfill.</li>
+          <li>The schema cannot push until every row carries both new fields.</li>
+          <li data-quiz-correct>Until the backfill drains, the index is incomplete while <code>exhaustive</code> still describes the search, so the assistant would claim to have covered a catalogue it had not.</li>
+          <li>The token's hash depends on the projection revision.</li>
+        </ol>
+        <p data-quiz-explanation>Both fields are optional precisely so the schema can push first; the ordering deploy, backfill, mint is what closes the window, and with one store it is closed by hand.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does a question made only of stop words return <code>exhaustive: false</code> rather than the whole shop?</p>
+        <ol data-quiz-options>
+          <li>The response validator caps the match count at eight.</li>
+          <li data-quiz-correct>Convex text search is an OR over tokens, so short tokens and stop words are dropped first, and a question with nothing left is not a search that covered anything.</li>
+          <li>The index rejects queries below a minimum length.</li>
+          <li>The route treats it as an unreadable header.</li>
+        </ol>
+        <p data-quiz-explanation><code>exhaustive</code> means a search happened and did not overflow. With no usable tokens, no search happened, so claiming coverage would be a lie told to a shopper.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section data-report-section="subagent-evidence">
+    <h2>Subagents and what each contributed</h2>
+    <p>Implementation was carried out on four ticket branches before this delivery; this report covers the integration of that work and the delivery run itself.</p>
+    <dl>
+      <dt>Delivery agent (this run)</dt>
+      <dd>Integrated the four ticket branches on one base, found and fixed the literal-NUL control-character class that made the route file binary to git, ran the focused and rail sensor sets, the admission checker, the harness suites and the project typecheck, authored this report, stamped the diff fingerprint across the report and the three solution notes, and carried the candidate through the canonical gate. Carried the <code>networkx</code> pin that keeps the graph-freshness gate reproducible on CI, and found the ordering leak in round two while writing the test for the option cap.</dd>
+      <dt><code>lens.outcome-correctness</code></dt>
+      <dd>Mandated review lens. Judged the delivered diff against the four tickets' acceptance criteria. Confirmed the store comes from the admitted constraint, that unknown and revoked tokens are indistinguishable, that the touch is interval-gated on both sides and cannot fail the response, and that the backfill leaves the POS register revision alone. Raised round one's blocking finding: the match limit was spent before visibility was re-derived, so a hidden row could change the match count and <code>hasMore</code>. In round two, carried the same reasoning to the per-product option cap, which was still counting candidate rows.</dd>
+      <dt><code>lens.adversarial-testing</code></dt>
+      <dd>Mandated review lens. Probed the tests for the abuse paths this change exists to close and reached the same defect from the other side — the hidden-code equivalence assertion never varied the limit, the one arrangement where the oracle is reachable. Also found that the text index's overflow branch and the backfill's real production input had no case at all, and that "without hashing it" was asserted only through a return value. Confirmed by mutation that the touch bounds, the wrong-route ordering, the forbidden-key body pin and the header-bound cases do bite. In round two, mutated a throwaway copy of the candidate to prove the round-one fix closed the match-limit oracle and that the option cap still carried it, and asked for the zero-option arrangement to be pinned rather than assumed.</dd>
+      <dt><code>ce-correctness-reviewer</code></dt>
+      <dd>The persona named by <code>.agents/review-selection.json</code> for this candidate. Traced the validator change's dependency closure (every <code>http_read</code> definition site supplies <code>actors.catalogReader</code>, so the per-request validation cannot break an existing route), the adapter's branch ordering, the revoke handler's row-versus-constraint comparison, the route's byte and codepoint bounds, and the absence of an import cycle. Approved with no findings in both rounds, recording the un-backfilled-store window and the projection key-order question as residual risks. Round two bounded the candidate set after the fix (at most 101 buckets), confirmed <code>truncated</code> is now set only by an answerable product, and caught the runtime documentation still describing the pinned requirements file as holding graphify alone.</dd>
+    </dl>
+    <p>Per-token rate limiting and the shared-demo baseline rows lacking the new projection fields are recorded plan deferrals rather than review findings, and were declared as such in the reviewers' delivery contract.</p>
+  </section>
+</article>
+</body>
+</html>

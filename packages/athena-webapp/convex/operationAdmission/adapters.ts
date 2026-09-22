@@ -4,6 +4,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type {
   AnyOperationDefinition,
+  OperationActorKind,
   OperationAdapter,
   OperationAdapterAdmitted,
   OperationAdapterDenied,
@@ -107,6 +108,11 @@ export function createPublicOperationAdapter(): OperationAdapter {
  * `outcome` distinguishes "no identity at all" (401) from "identified and
  * refused" (403). Anything without this marker is a real fault and must keep
  * surfacing as a 500.
+ *
+ * `adapter` names the actor kind that refused, mirroring `decision.adapter`
+ * on the admitted side. HTTP ingress uses it where a caller kind has its own
+ * refusal contract; every other refusal keeps the one opaque body, so this
+ * field widens nothing on its own.
  */
 export const OPERATION_ADMISSION_DENIED = "operation_admission_denied" as const;
 
@@ -115,6 +121,7 @@ export type OperationAdmissionDenialData = {
   message: string;
   outcome: "denied" | "unauthenticated";
   reason?: OperationAdapterDeniedReason;
+  adapter?: OperationActorKind;
 };
 
 export function operationAdmissionDenial(
@@ -170,7 +177,13 @@ export class OperationUnauthenticatedError extends Error {
  */
 const RAIL_DENIAL_MARKER = "__operationAdmissionDenied";
 
-function markAsRailDenial<E extends Error>(error: E): E {
+/** Which adapter refused, carried the same invisible way as the marker. */
+const RAIL_DENIAL_ADAPTER = "__operationAdmissionDeniedBy";
+
+function markAsRailDenial<E extends Error>(
+  error: E,
+  adapter?: OperationActorKind,
+): E {
   if (!Object.prototype.hasOwnProperty.call(error, RAIL_DENIAL_MARKER)) {
     Object.defineProperty(error, RAIL_DENIAL_MARKER, {
       value: true,
@@ -179,7 +192,26 @@ function markAsRailDenial<E extends Error>(error: E): E {
       writable: false,
     });
   }
+  if (
+    adapter &&
+    !Object.prototype.hasOwnProperty.call(error, RAIL_DENIAL_ADAPTER)
+  ) {
+    Object.defineProperty(error, RAIL_DENIAL_ADAPTER, {
+      value: adapter,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  }
   return error;
+}
+
+function railDenialAdapter(error: unknown): OperationActorKind | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const adapter = (error as Record<string, unknown>)[RAIL_DENIAL_ADAPTER];
+  return typeof adapter === "string"
+    ? (adapter as OperationActorKind)
+    : undefined;
 }
 
 export function isRailRaisedDenial(error: unknown): boolean {
@@ -190,10 +222,14 @@ export function isRailRaisedDenial(error: unknown): boolean {
   );
 }
 
-export function operationDenialError(outcome: OperationAdapterDenied): Error {
+export function operationDenialError(
+  outcome: OperationAdapterDenied,
+  adapter?: OperationActorKind,
+): Error {
   return markAsRailDenial(
     outcome.error ??
       new Error("This operation is not available for the current actor."),
+    adapter,
   );
 }
 
@@ -223,10 +259,12 @@ export function asOperationAdmissionDenial(error: unknown) {
   // expected status on these routes — so nothing retried and no 5xx reached
   // monitoring. A storefront outage would have looked like a wall of refusals.
   if (isRailRaisedDenial(error)) {
+    const adapter = railDenialAdapter(error);
     return operationAdmissionDenial({
       kind: OPERATION_ADMISSION_DENIED,
       message: (error as Error).message,
       outcome: "denied",
+      ...(adapter ? { adapter } : {}),
     });
   }
 
@@ -261,7 +299,7 @@ export async function resolveAdmissionChain<
       return { ...outcome, operation: definition };
     }
     if (outcome.kind === "denied") {
-      throw operationDenialError(outcome);
+      throw operationDenialError(outcome, adapter.kind);
     }
   }
 

@@ -14,6 +14,7 @@ import {
   defineStockAdjustmentsRead,
 } from "./domains/_shapes";
 import { POS_READ_DEFINITIONS } from "./domains/pos_readDefinitions";
+import { CATALOG_ACCESS_READ_DEFINITIONS } from "./domains/catalogAccess_readDefinitions";
 import { INVENTORY_CATALOG_READ_DEFINITIONS } from "./domains/inventoryCatalog_readDefinitions";
 import { INVENTORY_IDENTITY_READ_DEFINITIONS } from "./domains/inventoryIdentity_readDefinitions";
 import { OPERATIONS_READ_DEFINITIONS } from "./domains/operations_readDefinitions";
@@ -778,6 +779,7 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinit
     ...POS_READ_DEFINITIONS,
     ...INVENTORY_CATALOG_READ_DEFINITIONS,
     ...INVENTORY_IDENTITY_READ_DEFINITIONS,
+    ...CATALOG_ACCESS_READ_DEFINITIONS,
     ...OPERATIONS_READ_DEFINITIONS,
     ...STOREFRONT_CUSTOMER_READ_DEFINITIONS,
     ...STOREFRONT_OPERATOR_READ_DEFINITIONS,
@@ -835,10 +837,28 @@ export function validateReadOperationDefinition(
         "http_read definitions must declare actors.storefrontCustomer.",
       );
     }
+    // Stated everywhere, defaulted nowhere: a route that forgets the
+    // catalogue reader is a route nobody decided about.
+    if (definition.actors.catalogReader === undefined) {
+      errors.push("http_read definitions must declare actors.catalogReader.");
+    }
   } else if (definition.ingressVerification !== undefined) {
     errors.push(
       "ingressVerification is only valid on http and http_read kinds.",
     );
+  }
+  if (definition.actors.catalogReader !== undefined) {
+    if (definition.kind !== "http_read") {
+      errors.push("actors.catalogReader is only valid on http_read kinds.");
+    }
+    if (definition.actors.catalogReader === "admit") {
+      // The admitted store comes from the token row, and the argument is only
+      // cross-checked against it; a reader with no store to be clamped to
+      // would read across the deployment.
+      if (definition.scope.kind !== "store") {
+        errors.push("Catalogue-reader reads must declare a store scope.");
+      }
+    }
   }
   if (definition.actors.storefrontCustomer === "admit") {
     if (definition.kind !== "http_read") {

@@ -6,6 +6,7 @@ import {
   athenaUserSchema,
   bannerMessageSchema,
   bestSellerSchema,
+  catalogAccessTokenSchema,
   catalogSummarySchema,
   categorySchema,
   colorSchema,
@@ -1510,6 +1511,10 @@ const schema = defineSchema({
     .searchIndex("searchText", {
       searchField: "searchText",
       filterFields: ["storeId"],
+    })
+    .searchIndex("assistant_search", {
+      searchField: "assistantSearchText",
+      filterFields: ["storeId", "assistantVisible"],
     }),
   posRegisterCatalogRevision: defineTable(
     posRegisterCatalogRevisionSchema,
@@ -1699,6 +1704,9 @@ const schema = defineSchema({
   serviceInventoryUsage: defineTable(serviceInventoryUsageSchema)
     .index("by_serviceCaseId", ["serviceCaseId"])
     .index("by_productSkuId", ["productSkuId"]),
+  catalogAccessToken: defineTable(catalogAccessTokenSchema)
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_storeId_status", ["storeId", "status"]),
   store: defineTable(storeSchema)
     .index("by_slug", ["slug"])
     .index("by_organizationId_slug", ["organizationId", "slug"]),

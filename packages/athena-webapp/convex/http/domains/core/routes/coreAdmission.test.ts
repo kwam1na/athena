@@ -117,6 +117,7 @@ describe("U11 route definitions", () => {
       normalUser: "deny",
       sharedDemo: "deny",
       storefrontCustomer: "admit",
+      catalogReader: "deny",
       public: "deny",
     });
   });

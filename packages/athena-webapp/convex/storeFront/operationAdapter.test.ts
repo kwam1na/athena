@@ -38,6 +38,7 @@ const customerRead = defineReadOperation({
     normalUser: "deny",
     sharedDemo: "deny",
     storefrontCustomer: "admit",
+    catalogReader: "deny",
     public: "deny",
   },
 });
@@ -126,6 +127,38 @@ describe("storefront customer adapter", () => {
         ),
       ).resolves.toMatchObject({ kind: "denied", reason: "claim_missing" });
     }
+  });
+
+  /**
+   * A catalogue token is somebody else's credential. The shopper adapter does
+   * not read it, does not deny on it, and leaves the chain free to reach the
+   * adapter that does.
+   */
+  it("ignores a catalogue token in the claim and lets the chain continue", async () => {
+    const readerClaim = {
+      [OPERATION_INGRESS_CLAIM_ARG]: { catalogAccessTokenHash: "a".repeat(64) },
+    };
+
+    await expect(
+      createStorefrontCustomerReadOperationAdapter().resolve(
+        ctxWith({}) as never,
+        { ...readerClaim },
+        {
+          ...customerRead,
+          actors: { ...customerRead.actors, storefrontCustomer: "deny" },
+        } as never,
+      ),
+    ).resolves.toEqual({ kind: "not_applicable" });
+
+    // Even on a route that DOES admit shoppers, a token-only claim names no
+    // shopper, so the read falls through rather than denying.
+    await expect(
+      createStorefrontCustomerReadOperationAdapter().resolve(
+        ctxWith({}) as never,
+        { ...readerClaim },
+        customerRead,
+      ),
+    ).resolves.toEqual({ kind: "unauthenticated" });
   });
 
   it("admits a correctly signed guest claim", async () => {

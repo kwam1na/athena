@@ -123,6 +123,7 @@ function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
     case "shared_demo":
       return actor.athenaUserId;
     case "storefront_customer":
+    case "catalog_reader":
     case "public":
       return undefined;
     default: {

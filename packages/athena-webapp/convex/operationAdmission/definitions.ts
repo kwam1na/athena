@@ -13,6 +13,7 @@ import {
   transactionStoreWriteOperation,
 } from "./domains/_shapes";
 import { POS_DEFINITIONS } from "./domains/pos_definitions";
+import { CATALOG_ACCESS_DEFINITIONS } from "./domains/catalogAccess_definitions";
 import { INVENTORY_CATALOG_DEFINITIONS } from "./domains/inventoryCatalog_definitions";
 import { INVENTORY_IDENTITY_DEFINITIONS } from "./domains/inventoryIdentity_definitions";
 import { OPERATIONS_DEFINITIONS } from "./domains/operations_definitions";
@@ -821,6 +822,7 @@ export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = O
   ...POS_DEFINITIONS,
   ...INVENTORY_CATALOG_DEFINITIONS,
   ...INVENTORY_IDENTITY_DEFINITIONS,
+  ...CATALOG_ACCESS_DEFINITIONS,
   ...OPERATIONS_DEFINITIONS,
   ...STOREFRONT_CUSTOMER_DEFINITIONS,
   ...STOREFRONT_OPERATOR_DEFINITIONS,
@@ -907,6 +909,13 @@ export function validateOperationDefinition(
     definition.effects.gateways.length === 0
   ) {
     errors.push("Protected effects must declare at least one gateway.");
+  }
+
+  // No write kind has a catalogue reader: the credential is read-only by
+  // construction, so declaring it on a mutation/action/http is a mistake
+  // rather than a policy.
+  if (definition.actors.catalogReader !== undefined) {
+    errors.push("actors.catalogReader is only valid on http_read kinds.");
   }
 
   if (definition.actors.storefrontCustomer === "admit") {

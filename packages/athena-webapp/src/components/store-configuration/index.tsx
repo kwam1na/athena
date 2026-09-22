@@ -8,6 +8,7 @@ import { FulfillmentView } from "./components/FulfillmentView";
 import { MtnMomoView } from "./components/MtnMomoView";
 import { StoreHoursView } from "./components/StoreHoursView";
 import { NotificationsView } from "./components/NotificationsView";
+import { CatalogAccessView } from "./components/CatalogAccessView";
 
 export const StoreConfiguration = () => {
   return (
@@ -26,6 +27,8 @@ export const StoreConfiguration = () => {
           <FulfillmentView />
 
           <NotificationsView />
+
+          <CatalogAccessView />
         </div>
       </div>
     </View>

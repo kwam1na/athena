@@ -42,6 +42,12 @@ const actorValidator = v.union(
     storeFrontUserId: v.optional(v.id("storeFrontUser")),
     guestId: v.optional(v.id("guest")),
   }),
+  v.object({
+    kind: v.literal("catalog_reader"),
+    assurance: v.literal("bearer_token"),
+    storeId: v.id("store"),
+    tokenId: v.id("catalogAccessToken"),
+  }),
   v.object({ kind: v.literal("public") }),
 );
 
@@ -53,6 +59,7 @@ const admissionProjectionValidator = v.object({
       v.literal("normal_user"),
       v.literal("shared_demo"),
       v.literal("storefront_customer"),
+      v.literal("catalog_reader"),
       v.literal("public"),
     ),
     outcome: v.literal("admitted"),

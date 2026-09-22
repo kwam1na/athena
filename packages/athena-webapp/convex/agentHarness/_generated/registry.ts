@@ -1007,7 +1007,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_inventory_positions": {
       "binding": {
-        "implementationVersion": "4",
+        "implementationVersion": "5",
         "portKey": "inventory.positions",
         "readIntents": [
           "inventory.stock.view"
@@ -1486,7 +1486,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_replenishment": {
       "binding": {
-        "implementationVersion": "4",
+        "implementationVersion": "5",
         "portKey": "inventory.replenishment",
         "readIntents": [
           "procurement.view",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:394c0b9bd98a9f2b",
+  "compatibilityDigest": "fnv1a64:9e3597d8a48b5aac",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2781,12 +2781,12 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "inventory.positions": {
-      "implementationVersion": "4",
-      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
+      "implementationVersion": "5",
+      "sourceDigest": "sha256:58ed2206e32d171da78a027655bf6f85c7dbfd74db4cd69feb48200cfdb88611"
     },
     "inventory.replenishment": {
-      "implementationVersion": "4",
-      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
+      "implementationVersion": "5",
+      "sourceDigest": "sha256:58ed2206e32d171da78a027655bf6f85c7dbfd74db4cd69feb48200cfdb88611"
     },
     "operations.activity": {
       "implementationVersion": "1",
@@ -3288,7 +3288,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:readPositions",
         "kind": "internal_query"
       },
-      "implementationVersion": "4",
+      "implementationVersion": "5",
       "portKey": "inventory.positions",
       "projections": [
         "costOverlay"
@@ -3320,7 +3320,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:listReplenishment",
         "kind": "internal_query"
       },
-      "implementationVersion": "4",
+      "implementationVersion": "5",
       "portKey": "inventory.replenishment",
       "projections": [
         "supplierCommercial"
@@ -3557,7 +3557,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:32938673903841ef",
+  "registryDigest": "fnv1a64:cbdffe7462c7c1f5",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3708,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:394c0b9bd98a9f2b";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:9e3597d8a48b5aac";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:32938673903841ef";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:cbdffe7462c7c1f5";

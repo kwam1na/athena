@@ -642,7 +642,9 @@ Validation rules worth stating out loud:
 ## Adapter chain
 
 Order is trust order: **shared demo → normal user → storefront customer →
-public**. Adapters return `admitted | denied(recognized, typed reason) |
+catalogue reader → public**. The read chain carries all five; the write chain
+has no catalogue reader, because that credential is read-only by construction
+and both validators refuse it outside `http_read`. Adapters return `admitted | denied(recognized, typed reason) |
 unauthenticated | not_applicable`. The chain falls through **only** on
 `unauthenticated` / `not_applicable`; a `denied` outcome is terminal and is
 never retried against a lower-trust adapter; any unexpected throw propagates.
@@ -667,6 +669,23 @@ adapter classifies by error-message text.
   still asserts ownership of caller-supplied ids against the admitted actor.
   Unknown id, foreign store, a guest without `storeId`, or a missing claim on a
   write route is a terminal denial.
+- `catalog_reader` — an external program presenting a per-store catalogue
+  access token in `X-Assistant-Token`, admitted only on `http_read` where
+  `actors.catalogReader: "admit"`. `assurance: "bearer_token"`: the secret was
+  minted by this server and is stored only as a hash, so possession is
+  evidence the store issued it — but it authenticates a CALLER, not a person,
+  and carries no Athena identity. This is ingress identity, like the shopper
+  cookie, **not** delegated authority: it acts for itself under the store the
+  token names, never on an operator's behalf and never under an operator's
+  grant. The store comes from the token ROW; a `storeId` argument is only
+  cross-checked. Ingress hashes the header and decides nothing;
+  `inventory/catalogAccessAdapter.ts` looks the hash up. A PRESENTED
+  credential is recognised identity, so a route that denies this actor refuses
+  it terminally, before any lookup — it never falls through to `public`. A
+  refusal raised by this adapter answers with the fixed vendor-neutral code
+  `CATALOG_READER_REJECTION_BODY` instead of the opaque body, because the
+  caller is a program that must tell a dead credential from a sick server.
+  `actors.catalogReader` is **required** on every `http_read` definition.
 - `public` — no identity at all; admitted only where `actors.public: "admit"`,
   and it clamps nothing.
 

@@ -56,6 +56,7 @@ import type { MutationCtx } from "../_generated/server";
 import { deleteAgentHarnessContentForStoreWithCtx } from "../agentHarness/retention";
 import { purgePipelineBatchWithCtx } from "../reports/pipelineMaintenance";
 import { readPipelineControl } from "../reports/pipelineControl";
+import { deleteCatalogAccessTokensForStoreWithCtx } from "./catalogAccess";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -120,7 +121,16 @@ export async function removeStoreWithCtx(
     storeId,
     Date.now(),
   );
-  if (cleanup.hasMore || agentCleanup.hasMore || pipelineCleanup.hasMore) {
+  const tokenCleanup = await deleteCatalogAccessTokensForStoreWithCtx(
+    ctx,
+    storeId,
+  );
+  if (
+    cleanup.hasMore ||
+    agentCleanup.hasMore ||
+    pipelineCleanup.hasMore ||
+    tokenCleanup.hasMore
+  ) {
     await ctx.scheduler.runAfter(
       0,
       internal.inventory.stores.continueStoreRemoval,

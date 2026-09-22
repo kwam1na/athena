@@ -7,10 +7,30 @@ import {
   type SignedGuestClaimFields,
   isUnsignedStorefrontCookieValue,
   readStorefrontCookieSecret,
+  sha256Hex,
   signStorefrontCookieValue,
   storefrontCookieSignature,
   verifyStorefrontCookieValue,
 } from "../platform/storefrontCookieSignature";
+
+/**
+ * The shape a catalogue access token is minted in.
+ *
+ * Copied deliberately rather than imported from the mint module: this file is
+ * on the ingress path of every route, and the mint module pulls in the
+ * admission composition root. A value failing this pattern is not hashed at
+ * all, so a stray header costs nothing.
+ */
+const CATALOG_ACCESS_TOKEN_HEADER = "X-Assistant-Token";
+const CATALOG_ACCESS_TOKEN_HEADER_PATTERN = /^athcat_[A-Za-z0-9_-]{43}$/;
+
+const readCatalogAccessTokenHash = (c: Context): string | undefined => {
+  const presented = c.req.header(CATALOG_ACCESS_TOKEN_HEADER);
+  if (!presented || !CATALOG_ACCESS_TOKEN_HEADER_PATTERN.test(presented)) {
+    return undefined;
+  }
+  return sha256Hex(new TextEncoder().encode(presented));
+};
 
 export const getStoreDataFromRequest = (c: Context) => {
   const organizationId = getCookie(c, "organization_id") as Id<"organization">;
@@ -183,14 +203,15 @@ export const getStorefrontActorFromRequest = (c: Context) => {
 };
 
 /**
- * The ingress claim the admission rail resolves a `storefront_customer` actor
- * from.
+ * The ingress claim the admission rail resolves a `storefront_customer` or
+ * `catalog_reader` actor from.
  *
- * This reads cookies only. The `store_id` cookie is carried along so the
- * adapter can CROSS-CHECK it, never so it can decide the store: the admitted
- * store always comes from the claim row itself. A request with neither
- * `user_id` nor a VERIFIED `guest_id` yields `undefined` — a customer write
- * route treats that as a terminal denial.
+ * This reads cookies and one header. The `store_id` cookie is carried along
+ * so the adapter can CROSS-CHECK it, never so it can decide the store: the
+ * admitted store always comes from the claim row itself. A request carrying
+ * none of `user_id`, a VERIFIED `guest_id` or a well-formed catalogue token
+ * yields `undefined` — a customer write route treats that as a terminal
+ * denial.
  *
  * BOTH cookies travel when both are present, but the adapter prefers the
  * account for ACTOR IDENTITY (see `resolveStorefrontCustomer`), so the guest
@@ -206,6 +227,15 @@ export const getStorefrontActorFromRequest = (c: Context) => {
  * guest→account merge grant on it. The signature travels alongside as
  * `guestIdSignature` so the adapter can re-verify rather than inherit trust
  * from this function having run.
+ *
+ * THE TOKEN HALF IS INDEPENDENT. A well-formed `X-Assistant-Token` header
+ * contributes `catalogAccessTokenHash` whether or not any cookie is present,
+ * and a request carrying only that header yields a claim holding only that
+ * field. Hashing is all that happens here: this function decides nothing
+ * about whether the hash names a live token, which store it belongs to, or
+ * whether the route accepts that caller at all. A value that does not match
+ * the minted shape is ignored without being hashed, so the claim never
+ * carries a hash of arbitrary caller text.
  */
 export const getStorefrontClaimFromRequest = (
   c: Context,
@@ -215,12 +245,16 @@ export const getStorefrontClaimFromRequest = (
     | undefined;
   const guestId = readVerifiedGuestIdFromRequest(c);
   const storeId = getCookie(c, "store_id") as Id<"store"> | undefined;
+  const catalogAccessTokenHash = readCatalogAccessTokenHash(c);
 
-  if (!storeFrontUserId && !guestId) return undefined;
+  if (!storeFrontUserId && !guestId && !catalogAccessTokenHash) {
+    return undefined;
+  }
 
   const secret = readStorefrontCookieSecret();
 
   return {
+    ...(catalogAccessTokenHash ? { catalogAccessTokenHash } : {}),
     ...(storeFrontUserId ? { storeFrontUserId } : {}),
     ...(guestId && secret
       ? {

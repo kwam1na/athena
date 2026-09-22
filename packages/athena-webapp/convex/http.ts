@@ -38,6 +38,7 @@ import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
 import { harnessWaiverRoutes } from "./http/domains/core/routes/harnessWaivers";
+import { assistantCatalogRoutes } from "./http/domains/core/routes/assistantCatalog";
 import { healthRouteReadDefinition } from "./operationAdmission/domains/httpCore_readDefinitions";
 import { admitHttpRead } from "./platform/operationAdmission";
 import { readStorefrontOriginAllowlist } from "./platform/storefrontOrigins";
@@ -129,6 +130,8 @@ app.route("/tracking-events", trackingEventRoutes);
 app.route("/marketing/walkthrough-requests", walkthroughRequestRoutes);
 app.route("/marketing/funnel-events", landingFunnelEventRoutes);
 app.route("/harness/waivers", harnessWaiverRoutes);
+
+app.route("/assistant-catalog", assistantCatalogRoutes);
 
 app.route("/auth", authRoutes);
 

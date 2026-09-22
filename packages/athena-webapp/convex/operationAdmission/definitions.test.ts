@@ -245,6 +245,34 @@ describe("operation admission definitions", () => {
     );
   });
 
+  /**
+   * The catalogue credential is read-only by construction — there is no
+   * write-path adapter for it — so declaring it on anything that writes is a
+   * mistake, not a policy. Every write kind refuses it.
+   */
+  it("rejects a catalogue-reader actor on every write kind", () => {
+    for (const kind of ["mutation", "action", "http"] as const) {
+      expect(
+        validateOperationDefinition({
+          kind,
+          operationId: `${kind}.catalogReader`,
+          capability: "orders.create",
+          scope: { kind: "store", storeIdArg: "storeId" },
+          readiness:
+            kind === "mutation" ? { kind: "store_write" } : { kind: "none" },
+          effects: { mode: "none" },
+          actors: {
+            normalUser: "admit",
+            sharedDemo: "deny",
+            ...(kind === "http" ? { storefrontCustomer: "deny" as const } : {}),
+            catalogReader: "deny",
+            public: "deny",
+          },
+        }),
+      ).toContain("actors.catalogReader is only valid on http_read kinds.");
+    }
+  });
+
   it("rejects a storefront-customer actor on a Convex mutation kind", () => {
     expect(
       validateOperationDefinition({

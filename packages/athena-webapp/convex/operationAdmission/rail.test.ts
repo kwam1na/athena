@@ -1,3 +1,4 @@
+import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 
 import { createAdmissionRail } from "./rail";
@@ -7,10 +8,13 @@ import {
   operationDenialError,
   OperationUnauthenticatedError,
 } from "./adapters";
-import { defineOperation } from "./domains/_shapes";
+import { defineOperation, defineReadOperation } from "./domains/_shapes";
+import { CATALOG_READER_REJECTION_BODY } from "./types";
 import type {
+  OperationActorKind,
   OperationAdapter,
   OperationDefinition,
+  OperationReadAdapter,
   OperationResourceGuards,
 } from "./types";
 
@@ -637,5 +641,133 @@ describe("http ingress", () => {
         },
       }).admitHttpRoute(webhook as never, vi.fn())(honoContext({}) as never),
     ).resolves.toMatchObject({ status: 403 });
+  });
+});
+
+/**
+ * A catalogue reader is a program with no person to ask, so it gets one extra
+ * bit over the opaque refusal every other caller sees: whether its CREDENTIAL
+ * was rejected (stop, get a new token) or the server is unwell (retry). The
+ * bit travels as the refusing adapter's kind on the typed denial — never as
+ * message text — and widens nothing else: the body carries a fixed code and
+ * no detail about stores, tokens or reasons.
+ */
+describe("catalogue reader refusal contract", () => {
+  const searchRead = defineReadOperation({
+    kind: "http_read" as const,
+    operationId: "test.rail.http.assistantSearch",
+    route: { method: "GET", path: "/assistant-catalog/search" },
+    access: { kind: "read" as const, intent: "storefront.catalog.view" },
+    scope: { kind: "store" as const, storeIdArg: "storeId" },
+    actors: {
+      normalUser: "deny" as const,
+      sharedDemo: "deny" as const,
+      storefrontCustomer: "deny" as const,
+      catalogReader: "admit" as const,
+      public: "deny" as const,
+    },
+  });
+
+  function denialFrom(adapterKind: OperationActorKind) {
+    return asOperationAdmissionDenial(
+      operationDenialError(
+        {
+          error: new Error("Catalogue access unavailable."),
+          kind: "denied",
+          recognized: true,
+          reason: "unknown_claim",
+        },
+        adapterKind,
+      ),
+    );
+  }
+
+  /** The route as it is really mounted, so the bytes on the wire are real. */
+  async function respondTo(thrown: unknown) {
+    const app = new Hono();
+    app.get(
+      "/assistant-catalog/search",
+      rail({
+        entrypoints: {
+          admitOperation: "admitOperation" as never,
+          admitReadOperation: "admitReadOperation" as never,
+        },
+      }).admitHttpRead(searchRead, async (c) => c.json({ matches: [] })),
+    );
+    return app.request(
+      "http://api.test/assistant-catalog/search",
+      {},
+      {
+        runQuery: async () => {
+          throw thrown;
+        },
+      },
+    );
+  }
+
+  it("names the refusing adapter on the typed denial", () => {
+    expect(
+      operationAdmissionDenialData(denialFrom("catalog_reader")),
+    ).toMatchObject({ outcome: "denied", adapter: "catalog_reader" });
+    expect(
+      operationAdmissionDenialData(denialFrom("storefront_customer")),
+    ).toMatchObject({ outcome: "denied", adapter: "storefront_customer" });
+  });
+
+  it("tags a denial with the kind of the adapter that raised it", async () => {
+    const denying: OperationReadAdapter = {
+      kind: "catalog_reader",
+      resolve: vi.fn(async () => ({
+        error: new Error("Catalogue access unavailable."),
+        kind: "denied" as const,
+        reason: "actor_denied" as const,
+        recognized: true,
+      })),
+    };
+    const wrapped = rail({
+      readAdapters: [denying],
+    }).admitPublicQuery(searchRead as never, vi.fn());
+
+    const thrown = await wrapped({ db: {} } as never, {}).catch(
+      (error: unknown) => error,
+    );
+    expect(
+      operationAdmissionDenialData(asOperationAdmissionDenial(thrown)),
+    ).toMatchObject({ adapter: "catalog_reader" });
+  });
+
+  it("answers a rejected credential with the fixed code, byte for byte", async () => {
+    const response = await respondTo(denialFrom("catalog_reader"));
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe('{"code":"reference_token_rejected"}');
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(JSON.stringify(CATALOG_READER_REJECTION_BODY)).toBe(
+      '{"code":"reference_token_rejected"}',
+    );
+  });
+
+  it("leaves every other refusal on the opaque body", async () => {
+    const other = await respondTo(denialFrom("storefront_customer"));
+    expect([other.status, await other.text()]).toEqual([
+      403,
+      '{"error":"Request rejected."}',
+    ]);
+
+    const unclaimed = await respondTo(
+      asOperationAdmissionDenial(new OperationUnauthenticatedError()),
+    );
+    expect([unclaimed.status, await unclaimed.text()]).toEqual([
+      401,
+      '{"error":"Authentication required."}',
+    ]);
+  });
+
+  it("still reports a genuine fault as a fault, not a rejected credential", async () => {
+    // Hono's own error handling renders it: a 500, so clients retry and
+    // monitoring pages, rather than a refusal a reader would act on.
+    const response = await respondTo(new TypeError("index missing"));
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("reference_token_rejected");
   });
 });

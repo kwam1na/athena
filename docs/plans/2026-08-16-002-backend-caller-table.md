@@ -21,6 +21,8 @@ parameter, never as a request-body field.
 | `DELETE /reviews/:id` | http | packages/athena-webapp/convex/http/domains/customerChannel/routes/reviews.ts:251 | `internal.storeFront.reviews.deleteReviewInternal` | internal | `id` (client-supplied) | already-internal |
 | `DELETE /savedBags/:bagId/items/:itemId` | http | packages/athena-webapp/convex/http/domains/customerChannel/routes/savedBag.ts:139 | `internal.storeFront.savedBagItem.deleteItemFromSavedBag` | internal | `itemId` (client-supplied) | already-internal |
 | `GET /analytics/product-view-count` | http_read | packages/athena-webapp/convex/http/domains/core/routes/analytics.ts:118 | `internal.storeFront.analytics.getProductViewCountInternal` | internal | `productId` (client-supplied) | already-internal |
+| `GET /assistant-catalog/search` | http_read | packages/athena-webapp/convex/http/domains/core/routes/assistantCatalog.ts:145 | `internal.inventory.catalogAccess.touch` | internal | `tokenId` (client-supplied) | already-internal |
+| `GET /assistant-catalog/search` | http_read | packages/athena-webapp/convex/http/domains/core/routes/assistantCatalog.ts:123 | `internal.storeFront.assistantCatalog.search` | internal | `storeId` (client-supplied) | already-internal |
 | `GET /bags/:bagId` | http_read | packages/athena-webapp/convex/http/domains/customerChannel/routes/bag.ts:49 | `internal.storeFront.bag.create` | internal | `storeFrontUserId` (client-supplied)<br>`storeId` (client-supplied) | already-internal |
 | `GET /bags/:bagId` | http_read | packages/athena-webapp/convex/http/domains/customerChannel/routes/bag.ts:43 | `internal.storeFront.bag.getByUserIdInternal` | internal | `storeFrontUserId` (client-supplied) | already-internal |
 | `GET /categories` | http_read | packages/athena-webapp/convex/http/domains/core/routes/categories.ts:75 | `internal.inventory.categories.getAllInternal` | internal | `storeId` (client-supplied) | already-internal |
@@ -105,9 +107,9 @@ parameter, never as a request-body field.
 | `intelligence/capabilities/actions:generateUserInsights` | action | packages/athena-webapp/convex/intelligence/capabilities/actions.ts:599 | `internal.intelligence.runs.updateProviderInvocation` | internal | `invocationId` (client-supplied) | already-internal |
 | `intelligence/capabilities/actions:generateUserInsights` | action | packages/athena-webapp/convex/intelligence/capabilities/actions.ts:580 | `internal.intelligence.runs.updateProviderInvocation` | internal | `invocationId` (client-supplied) | already-internal |
 | `inventory/auth:sendVerificationCodeViaProvider` | action | packages/athena-webapp/convex/inventory/auth.ts:190 | `internal.inventory.auth.requestVerificationCode` | internal | — | already-internal |
-| `inventory/stores:getAllByOrganization` | action | packages/athena-webapp/convex/inventory/stores.ts:213 | `internal.inventory.stores.getAllInternal` | internal | `organizationId` (client-supplied) | already-internal |
-| `inventory/stores:updateLandingPageReel` | action | packages/athena-webapp/convex/inventory/stores.ts:807 | `internal.inventory.stores.updateConfig` | internal | `id` (client-supplied) | already-internal |
-| `inventory/stores:uploadImageAssets` | action | packages/athena-webapp/convex/inventory/stores.ts:757 | `internal.inventory.stores.createImageAsset` | internal | `storeId` (client-supplied) | already-internal |
+| `inventory/stores:getAllByOrganization` | action | packages/athena-webapp/convex/inventory/stores.ts:223 | `internal.inventory.stores.getAllInternal` | internal | `organizationId` (client-supplied) | already-internal |
+| `inventory/stores:updateLandingPageReel` | action | packages/athena-webapp/convex/inventory/stores.ts:817 | `internal.inventory.stores.updateConfig` | internal | `id` (client-supplied) | already-internal |
+| `inventory/stores:uploadImageAssets` | action | packages/athena-webapp/convex/inventory/stores.ts:767 | `internal.inventory.stores.createImageAsset` | internal | `storeId` (client-supplied) | already-internal |
 | `llm/storeInsights:getStoreInsightsFromLlm` | action | packages/athena-webapp/convex/llm/storeInsights.ts:30 | `internal.intelligence.capabilities.actions
           .internalGenerateStoreInsights` | internal | — | already-internal |
 | `llm/userInsights:getStoreInsightsFromLlm` | action | packages/athena-webapp/convex/llm/userInsights.ts:57 | `internal.intelligence.capabilities.actions
@@ -188,4 +190,4 @@ parameter, never as a request-body field.
 | `storeFront/reviews:sendFeedbackRequest` | action | packages/athena-webapp/convex/storeFront/reviews.ts:876 | `internal.storeFront.onlineOrderItem.get` | internal | `id` (client-supplied) | already-internal |
 | `storeFront/reviews:sendFeedbackRequest` | action | packages/athena-webapp/convex/storeFront/reviews.ts:934 | `internal.storeFront.onlineOrderItem.updateInternal` | internal | `id` (client-supplied) | already-internal |
 
-Rows: 173
+Rows: 175

@@ -290,4 +290,89 @@ describe("operation read admission definitions", () => {
       ]),
     );
   });
+
+  /**
+   * Coverage is stated, never defaulted: a new read route that forgets the
+   * catalogue reader must fail here rather than inherit somebody's guess.
+   * `requireValidReadDefinition` runs per request, so this validator and the
+   * definition helpers can never be out of step in a released build.
+   */
+  describe("catalogue reader coverage", () => {
+    const httpRead = (
+      actors: Record<string, unknown>,
+      scope: unknown = { kind: "store", storeIdArg: "storeId" },
+    ) =>
+      defineReadOperation({
+        kind: "http_read" as const,
+        route: { method: "GET", path: "/x" },
+        operationId: "test.read.catalogReader",
+        access: { kind: "read" as const, intent: "storefront.catalog.view" },
+        scope: scope as never,
+        actors: actors as never,
+      });
+
+    it("requires the declaration on every http_read", () => {
+      expect(
+        validateReadOperationDefinition(
+          httpRead({
+            normalUser: "deny",
+            sharedDemo: "deny",
+            storefrontCustomer: "deny",
+            public: "admit",
+          }),
+        ),
+      ).toEqual(["http_read definitions must declare actors.catalogReader."]);
+    });
+
+    it("rejects the declaration on a query read", () => {
+      expect(
+        validateReadOperationDefinition(
+          defineReadOperation({
+            kind: "query" as const,
+            functionName: "inventory/products:getAll",
+            operationId: "test.query.catalogReader",
+            access: { kind: "read" as const, intent: "storefront.catalog.view" },
+            scope: { kind: "store" as const, storeIdArg: "storeId" },
+            actors: {
+              normalUser: "admit",
+              sharedDemo: "deny",
+              catalogReader: "deny",
+              public: "deny",
+            } as never,
+          }),
+        ),
+      ).toEqual(["actors.catalogReader is only valid on http_read kinds."]);
+    });
+
+    it("requires a store scope wherever the reader is admitted", () => {
+      expect(
+        validateReadOperationDefinition(
+          httpRead(
+            {
+              normalUser: "deny",
+              sharedDemo: "deny",
+              storefrontCustomer: "deny",
+              catalogReader: "admit",
+              public: "deny",
+            },
+            { kind: "none" },
+          ),
+        ),
+      ).toEqual(["Catalogue-reader reads must declare a store scope."]);
+    });
+
+    it("accepts a fully declared reader route", () => {
+      expect(
+        validateReadOperationDefinition(
+          httpRead({
+            normalUser: "deny",
+            sharedDemo: "deny",
+            storefrontCustomer: "deny",
+            catalogReader: "admit",
+            public: "deny",
+          }),
+        ),
+      ).toEqual([]);
+    });
+  });
 });

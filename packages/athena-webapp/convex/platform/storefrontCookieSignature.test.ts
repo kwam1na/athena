@@ -19,11 +19,35 @@ import {
   hmacSha256Hex,
   isUnsignedStorefrontCookieValue,
   readStorefrontCookieSecret,
+  sha256Hex,
   signStorefrontCookieValue,
   storefrontCookieSignature,
   verifyStorefrontCookieSignature,
   verifyStorefrontCookieValue,
 } from "./storefrontCookieSignature";
+
+describe("sha256Hex", () => {
+  // The synchronous digest exists because a claim extractor cannot await
+  // `crypto.subtle.digest`. Pinning it against the platform digest is the only
+  // thing that stops the hand-rolled block loop from drifting.
+  it.each([
+    "",
+    "athcat_",
+    "a".repeat(55),
+    "a".repeat(56),
+    "a".repeat(64),
+    "a".repeat(200),
+    "\u00e9\u4e2d\ud83d\udd11",
+  ])("matches crypto.subtle.digest for %j", async (input) => {
+    const bytes = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const expected = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+
+    expect(sha256Hex(bytes)).toBe(expected);
+  });
+});
 
 describe("HMAC-SHA-256", () => {
   it("matches the RFC 4231 vectors", () => {
