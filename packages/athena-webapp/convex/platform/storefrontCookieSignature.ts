@@ -306,3 +306,17 @@ export function hmacSha256Hex(secret: string, message: string): string {
     byte.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+/**
+ * Lowercase hex SHA-256 of raw bytes.
+ *
+ * Synchronous on purpose: callers hash a presented credential inside request
+ * parsing, where `crypto.subtle.digest` (a Promise) cannot be awaited. A test
+ * pins this against `crypto.subtle.digest` so the pure implementation above
+ * can never drift from the platform digest.
+ */
+export function sha256Hex(bytes: Uint8Array): string {
+  return Array.from(sha256(bytes), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}

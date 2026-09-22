@@ -243,10 +243,19 @@ const calculateTotalAvailableCount = (skus: ProductSku[]): number => {
   return skus.reduce((total, sku) => total + (sku.quantityAvailable || 0), 0);
 };
 
-async function adjustSkuAvailabilityForActiveHolds(
+/**
+ * Subtract the store's active POS holds from durable availability.
+ *
+ * Exported because every surface that states stock has to state the SAME
+ * stock: a wig held at the register is not available online, and a second
+ * derivation would let the assistant offer what the counter already sold.
+ */
+export async function adjustSkuAvailabilityForActiveHolds<
+  TSku extends { _id: Id<"productSku">; quantityAvailable: number },
+>(
   ctx: QueryCtx,
   args: {
-    skus: ProductSku[];
+    skus: TSku[];
     storeId: Id<"store">;
   },
 ) {

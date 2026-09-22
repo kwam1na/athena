@@ -25,7 +25,12 @@ describe("http health route", () => {
       route: { method: "GET", path: "/health" },
       access: { intent: "platform.health.view" },
       scope: { kind: "none" },
-      actors: { public: "admit", sharedDemo: "deny", storefrontCustomer: "deny" },
+      actors: {
+        public: "admit",
+        sharedDemo: "deny",
+        storefrontCustomer: "deny",
+        catalogReader: "deny",
+      },
     });
   });
 });

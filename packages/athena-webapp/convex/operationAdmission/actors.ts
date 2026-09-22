@@ -14,8 +14,8 @@ export function isPublicOperationActor(actor: OperationActor) {
 }
 
 /**
- * Athena user id for an admitted actor, or undefined for an anonymous public
- * actor that carries no identity.
+ * Athena user id for an admitted actor, or undefined for the kinds that carry
+ * no Athena identity at all (anonymous, storefront shopper, catalogue reader).
  */
 export function getOperationActorAthenaUserId(
   actor: OperationActor,
@@ -27,6 +27,10 @@ export function getOperationActorAthenaUserId(
 
 export function isStorefrontCustomerOperationActor(actor: OperationActor) {
   return actor.kind === "storefront_customer";
+}
+
+export function isCatalogReaderOperationActor(actor: OperationActor) {
+  return actor.kind === "catalog_reader";
 }
 
 /**

@@ -42,6 +42,7 @@ function customerRead(args: {
       normalUser: "deny" as const,
       sharedDemo: "deny" as const,
       storefrontCustomer: "admit" as const,
+      catalogReader: "deny" as const,
       public: "deny" as const,
     },
   });
@@ -63,6 +64,7 @@ function browseRead(args: {
       normalUser: "admit" as const,
       sharedDemo: "deny" as const,
       storefrontCustomer: "deny" as const,
+      catalogReader: "deny" as const,
       public: "admit" as const,
     },
   });

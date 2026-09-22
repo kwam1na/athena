@@ -37,6 +37,7 @@ import {
   createWhatsAppSignatureVerifier,
 } from "../operationAdmission/ingressVerification";
 import { walkthroughAllowedOrigins } from "../marketing/walkthroughConfig";
+import { createCatalogReaderReadOperationAdapter } from "../inventory/catalogAccessAdapter";
 import { createNormalUserDelegatedAuthorityPort } from "../operationAdmission/delegatedAuthority";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
@@ -72,8 +73,13 @@ import {
  * actor kind later is a registration rather than a change to the rail.
  *
  * Adapter order is trust order: shared demo -> normal user -> storefront
- * customer -> public. The chain falls through only on `unauthenticated` /
- * `not_applicable`; a recognized denial from any adapter is terminal.
+ * customer -> catalogue reader -> public. The chain falls through only on
+ * `unauthenticated` / `not_applicable`; a recognized denial from any adapter
+ * is terminal. The catalogue reader sits above `public` because it is the
+ * weakest identity that is still an identity — and below the cookie claim so
+ * a shopper's own session always wins on a route both could reach. It has no
+ * write-path entry: the credential is read-only by construction, which the
+ * write validator enforces.
  */
 
 /**
@@ -117,6 +123,7 @@ export const operationAdmissionRail = createAdmissionRail({
     createSharedDemoReadOperationAdapter(),
     createNormalUserReadOperationAdapter({ resolveAthenaUser }),
     createStorefrontCustomerReadOperationAdapter(),
+    createCatalogReaderReadOperationAdapter(),
     createPublicReadOperationAdapter(),
   ],
   resourceGuards,

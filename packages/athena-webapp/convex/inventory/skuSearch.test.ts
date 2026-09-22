@@ -5,7 +5,16 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
+  isStorefrontVisibleCategory,
+  isStorefrontVisibleSubcategory,
+} from "../../shared/storefrontVisibility";
+import {
+  isProjectionAssistantVisible,
+  tokenizeAssistantCatalogQuery,
+  refreshProductSkuSearchForCategory,
+  refreshProductSkuSearchForColor,
   refreshProductSkuSearchForProduct,
+  refreshProductSkuSearchForSubcategory,
   repairProductSkuSearchPage,
   removeProductSkuSearchProjections,
   removeStaleProductSkuSearchPage,
@@ -1183,5 +1192,262 @@ describe("SKU search foundation", () => {
     expect(skuSearchSource).toContain('.withIndex("by_subcategoryId"');
     expect(skuSearchSource).toContain('.withIndex("by_color"');
     expect(skuSearchSource).not.toContain('.query("productSku").collect()');
+  });
+});
+
+describe("assistant catalogue projection fields", () => {
+  function storefrontVisibleSeed() {
+    const seed = baseSeed();
+    return {
+      ...seed,
+      category: [{ ...seed.category[0], showOnStorefront: true }],
+      product: [{ ...seed.product[0], availability: "live", isVisible: true }],
+      productSku: [{ ...seed.productSku[0], isVisible: true }],
+    };
+  }
+
+  type StorefrontVisibleSeed = ReturnType<typeof storefrontVisibleSeed>;
+
+  function projectionRow(tables: ReturnType<typeof createCtx>["tables"]) {
+    const rows = Array.from(tables.productSkuSearch.values());
+    expect(rows).toHaveLength(1);
+    return rows[0]!;
+  }
+
+  it("omits the barcode from the assistant search text", async () => {
+    const { ctx, tables } = createCtx(storefrontVisibleSeed());
+
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const row = projectionRow(tables);
+    expect(row.searchText).toContain("ABC-123");
+    expect(row.searchText).toContain("BW-18");
+    expect(row.assistantSearchText).not.toContain("ABC-123");
+    expect(row.assistantSearchText).toContain("BW-18");
+    expect(row.assistantSearchText).toContain("Body");
+  });
+
+  it("omits the SKU code too when it is just the barcode", async () => {
+    const seed = storefrontVisibleSeed();
+    seed.productSku[0].sku = " abc-123 ";
+    const { ctx, tables } = createCtx(seed);
+
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const row = projectionRow(tables);
+    expect(row.searchText).toContain("abc-123");
+    expect(String(row.assistantSearchText).toLowerCase()).not.toContain(
+      "abc-123",
+    );
+  });
+
+  it("marks a storefront-visible SKU assistant visible", async () => {
+    const { ctx, tables } = createCtx(storefrontVisibleSeed());
+
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const row = projectionRow(tables);
+    expect(row.assistantVisible).toBe(true);
+    expect(isProjectionAssistantVisible(row as never)).toBe(true);
+  });
+
+  it.each([
+    ["a draft product", (seed: StorefrontVisibleSeed) => {
+      seed.product[0].availability = "draft";
+    }],
+    ["an archived product", (seed: StorefrontVisibleSeed) => {
+      seed.product[0].availability = "archived";
+    }],
+    ["a hidden product", (seed: StorefrontVisibleSeed) => {
+      seed.product[0].isVisible = false;
+    }],
+    ["a hidden SKU", (seed: StorefrontVisibleSeed) => {
+      seed.productSku[0].isVisible = false;
+    }],
+    ["a category hidden from the storefront", (seed: StorefrontVisibleSeed) => {
+      seed.category[0].showOnStorefront = false;
+    }],
+    ["a reserved category slug", (seed: StorefrontVisibleSeed) => {
+      seed.category[0].slug = "pos-quick-add";
+    }],
+    ["a reserved subcategory slug", (seed: StorefrontVisibleSeed) => {
+      seed.subcategory[0].slug = "uncategorized";
+    }],
+    ["a zero price", (seed: StorefrontVisibleSeed) => {
+      seed.productSku[0].price = 0;
+    }],
+  ])("keeps %s out of the assistant index", async (_label, mutate) => {
+    const seed = storefrontVisibleSeed();
+    mutate(seed);
+    const { ctx, tables } = createCtx(seed);
+
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const row = projectionRow(tables);
+    expect(row.assistantVisible).toBe(false);
+    expect(isProjectionAssistantVisible(row as never)).toBe(false);
+  });
+
+  it("derives assistant visibility from the shared storefront helpers", () => {
+    const visible = {
+      categoryShowOnStorefront: true,
+      categorySlug: "wigs",
+      isVisible: true,
+      price: 100,
+      productAvailability: "live" as const,
+      productIsVisible: true,
+      subcategorySlug: "bundles",
+    };
+
+    expect(isProjectionAssistantVisible(visible)).toBe(true);
+    expect(
+      isProjectionAssistantVisible({
+        ...visible,
+        categoryShowOnStorefront: false,
+      }),
+    ).toBe(
+      isStorefrontVisibleCategory({
+        showOnStorefront: false,
+        slug: visible.categorySlug,
+      }),
+    );
+    expect(
+      isProjectionAssistantVisible({ ...visible, categorySlug: "pos-quick-add" }),
+    ).toBe(
+      isStorefrontVisibleCategory({
+        showOnStorefront: true,
+        slug: "pos-quick-add",
+      }),
+    );
+    expect(
+      isProjectionAssistantVisible({
+        ...visible,
+        subcategorySlug: "uncategorized",
+      }),
+    ).toBe(isStorefrontVisibleSubcategory({ slug: "uncategorized" }));
+  });
+
+  it("reports an unchanged SKU as unchanged on a second sync", async () => {
+    const { ctx } = createCtx(storefrontVisibleSeed());
+
+    await expect(upsertProductSkuSearchProjection(ctx, skuId)).resolves.toBe(
+      "upserted",
+    );
+    await expect(upsertProductSkuSearchProjection(ctx, skuId)).resolves.toBe(
+      "unchanged",
+    );
+  });
+
+  it("does not bump the register catalog revision when only assistant visibility changes", async () => {
+    const { ctx, tables } = createCtx(storefrontVisibleSeed());
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    mockedCatalogRevision.advance.mockClear();
+
+    tables.category.set(categoryId, {
+      ...tables.category.get(categoryId)!,
+      showOnStorefront: false,
+    });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    expect(projectionRow(tables).assistantVisible).toBe(false);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: false,
+      storeId,
+    });
+  });
+
+  it("updates assistant visibility through every refresh path", async () => {
+    const { ctx, tables } = createCtx(storefrontVisibleSeed());
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    expect(projectionRow(tables).assistantVisible).toBe(true);
+
+    // Category refresh: the showOnStorefront flip lands in the same mutation.
+    tables.category.set(categoryId, {
+      ...tables.category.get(categoryId)!,
+      showOnStorefront: false,
+    });
+    await refreshProductSkuSearchForCategory(ctx, categoryId);
+    expect(projectionRow(tables).assistantVisible).toBe(false);
+
+    tables.category.set(categoryId, {
+      ...tables.category.get(categoryId)!,
+      showOnStorefront: true,
+    });
+    await refreshProductSkuSearchForCategory(ctx, categoryId);
+    expect(projectionRow(tables).assistantVisible).toBe(true);
+
+    // Subcategory refresh.
+    tables.subcategory.set(subcategoryId, {
+      ...tables.subcategory.get(subcategoryId)!,
+      slug: "uncategorized",
+    });
+    await refreshProductSkuSearchForSubcategory(ctx, subcategoryId);
+    expect(projectionRow(tables).assistantVisible).toBe(false);
+
+    tables.subcategory.set(subcategoryId, {
+      ...tables.subcategory.get(subcategoryId)!,
+      slug: "bundles",
+    });
+    await refreshProductSkuSearchForSubcategory(ctx, subcategoryId);
+    expect(projectionRow(tables).assistantVisible).toBe(true);
+
+    // Product refresh.
+    tables.product.set(productId, {
+      ...tables.product.get(productId)!,
+      availability: "draft",
+    });
+    await refreshProductSkuSearchForProduct(ctx, productId);
+    expect(projectionRow(tables).assistantVisible).toBe(false);
+
+    // Colour refresh recomputes the whole projection too.
+    tables.product.set(productId, {
+      ...tables.product.get(productId)!,
+      availability: "live",
+    });
+    await refreshProductSkuSearchForColor(ctx, colorId);
+    expect(projectionRow(tables).assistantVisible).toBe(true);
+
+    // SKU refresh.
+    tables.productSku.set(skuId, {
+      ...tables.productSku.get(skuId)!,
+      isVisible: false,
+    });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    expect(projectionRow(tables).assistantVisible).toBe(false);
+  });
+
+  it("defines the assistant search index filtered by store and visibility", () => {
+    const schemaSource = readFileSync("convex/schema.ts", "utf8");
+
+    expect(schemaSource).toContain('.searchIndex("assistant_search"');
+    expect(schemaSource).toContain('searchField: "assistantSearchText"');
+    expect(schemaSource).toContain(
+      'filterFields: ["storeId", "assistantVisible"]',
+    );
+  });
+});
+
+describe("assistant catalogue query tokens", () => {
+  it("keeps the words a shopper's question is actually about", () => {
+    expect(
+      tokenizeAssistantCatalogQuery("Do you have a burgundy BOB wig in 14?"),
+    ).toEqual(["burgundy", "bob", "wig"]);
+  });
+
+  it("drops a question that asks nothing, so it is never called a search", () => {
+    // Convex text search is an OR over tokens: left in, these would match the
+    // whole shop and the answer would claim to have covered it.
+    expect(tokenizeAssistantCatalogQuery("do you have any of the")).toEqual([]);
+    expect(tokenizeAssistantCatalogQuery("is it in?")).toEqual([]);
+    expect(tokenizeAssistantCatalogQuery("   ")).toEqual([]);
+  });
+
+  it("splits on punctuation and drops the fragments that are too short", () => {
+    // `14` and `20` go with every other one- and two-character token: the
+    // rule is the plan's, not a judgement about these particular digits.
+    expect(tokenizeAssistantCatalogQuery("BOB-14 / LACE-20")).toEqual([
+      "bob",
+      "lace",
+    ]);
   });
 });

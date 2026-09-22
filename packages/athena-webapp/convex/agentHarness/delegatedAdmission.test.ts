@@ -439,8 +439,16 @@ describe("scenario 5 — domain admission failure is typed, recorded once, never
 });
 
 describe("scenario 6 — the delegated seam leaves public ingress untouched", () => {
-  it("adds no actor kind to the public admission union", () => {
-    expectTypeOf<OperationActorKind>().toEqualTypeOf<"normal_user" | "shared_demo" | "storefront_customer" | "public">();
+  /**
+   * The pin is on the delegated seam, not on the size of the union. Ingress
+   * identities are added here as members — `catalog_reader` is one, a caller
+   * that presents its own credential and acts for itself. A DELEGATED run is
+   * the thing that must never become a member: it acts on an operator's
+   * behalf, through a derived grant, and adding it here would give it an
+   * identity of its own.
+   */
+  it("keeps delegated runs out of the public admission union", () => {
+    expectTypeOf<OperationActorKind>().toEqualTypeOf<"normal_user" | "shared_demo" | "storefront_customer" | "catalog_reader" | "public">();
   });
 });
 

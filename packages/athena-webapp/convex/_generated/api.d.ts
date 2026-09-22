@@ -144,6 +144,7 @@ import type * as harnessWaiver_storage from "../harnessWaiver/storage.js";
 import type * as http from "../http.js";
 import type * as http_domains_core_routes_admittedOwner from "../http/domains/core/routes/admittedOwner.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
+import type * as http_domains_core_routes_assistantCatalog from "../http/domains/core/routes/assistantCatalog.js";
 import type * as http_domains_core_routes_auth from "../http/domains/core/routes/auth.js";
 import type * as http_domains_core_routes_bannerMessage from "../http/domains/core/routes/bannerMessage.js";
 import type * as http_domains_core_routes_boundedBody from "../http/domains/core/routes/boundedBody.js";
@@ -196,6 +197,8 @@ import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
+import type * as inventory_catalogAccess from "../inventory/catalogAccess.js";
+import type * as inventory_catalogAccessAdapter from "../inventory/catalogAccessAdapter.js";
 import type * as inventory_catalogImport from "../inventory/catalogImport.js";
 import type * as inventory_catalogSummary from "../inventory/catalogSummary.js";
 import type * as inventory_categories from "../inventory/categories.js";
@@ -274,6 +277,7 @@ import type * as marketing_walkthroughRequestRetention from "../marketing/walkth
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
 import type * as migrations_backfillAmountsToPesewas from "../migrations/backfillAmountsToPesewas.js";
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
+import type * as migrations_backfillProductSkuSearchAssistantFields from "../migrations/backfillProductSkuSearchAssistantFields.js";
 import type * as migrations_backfillReportFactObservedAt from "../migrations/backfillReportFactObservedAt.js";
 import type * as migrations_backfillReportingCycleStart from "../migrations/backfillReportingCycleStart.js";
 import type * as migrations_backfillStoreCurrencyCase from "../migrations/backfillStoreCurrencyCase.js";
@@ -301,6 +305,8 @@ import type * as operationAdmission_delegatedAuthority from "../operationAdmissi
 import type * as operationAdmission_domains__shapes from "../operationAdmission/domains/_shapes.js";
 import type * as operationAdmission_domains_agentHarness_definitions from "../operationAdmission/domains/agentHarness_definitions.js";
 import type * as operationAdmission_domains_agentHarness_readDefinitions from "../operationAdmission/domains/agentHarness_readDefinitions.js";
+import type * as operationAdmission_domains_catalogAccess_definitions from "../operationAdmission/domains/catalogAccess_definitions.js";
+import type * as operationAdmission_domains_catalogAccess_readDefinitions from "../operationAdmission/domains/catalogAccess_readDefinitions.js";
 import type * as operationAdmission_domains_httpCore_definitions from "../operationAdmission/domains/httpCore_definitions.js";
 import type * as operationAdmission_domains_httpCore_readDefinitions from "../operationAdmission/domains/httpCore_readDefinitions.js";
 import type * as operationAdmission_domains_httpCustomer_definitions from "../operationAdmission/domains/httpCustomer_definitions.js";
@@ -562,6 +568,7 @@ import type * as schemas_inventory_appVerificationCode from "../schemas/inventor
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
+import type * as schemas_inventory_catalogAccessToken from "../schemas/inventory/catalogAccessToken.js";
 import type * as schemas_inventory_catalogSummary from "../schemas/inventory/catalogSummary.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
@@ -729,8 +736,10 @@ import type * as stockOps_purchaseOrderTracing from "../stockOps/purchaseOrderTr
 import type * as stockOps_purchaseOrders from "../stockOps/purchaseOrders.js";
 import type * as stockOps_receiving from "../stockOps/receiving.js";
 import type * as stockOps_replenishment from "../stockOps/replenishment.js";
+import type * as stockOps_stockState from "../stockOps/stockState.js";
 import type * as stockOps_vendors from "../stockOps/vendors.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
+import type * as storeFront_assistantCatalog from "../storeFront/assistantCatalog.js";
 import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
@@ -926,6 +935,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "http/domains/core/routes/admittedOwner": typeof http_domains_core_routes_admittedOwner;
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
+  "http/domains/core/routes/assistantCatalog": typeof http_domains_core_routes_assistantCatalog;
   "http/domains/core/routes/auth": typeof http_domains_core_routes_auth;
   "http/domains/core/routes/bannerMessage": typeof http_domains_core_routes_bannerMessage;
   "http/domains/core/routes/boundedBody": typeof http_domains_core_routes_boundedBody;
@@ -978,6 +988,8 @@ declare const fullApi: ApiFromModules<{
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
+  "inventory/catalogAccess": typeof inventory_catalogAccess;
+  "inventory/catalogAccessAdapter": typeof inventory_catalogAccessAdapter;
   "inventory/catalogImport": typeof inventory_catalogImport;
   "inventory/catalogSummary": typeof inventory_catalogSummary;
   "inventory/categories": typeof inventory_categories;
@@ -1056,6 +1068,7 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;
   "migrations/backfillAmountsToPesewas": typeof migrations_backfillAmountsToPesewas;
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
+  "migrations/backfillProductSkuSearchAssistantFields": typeof migrations_backfillProductSkuSearchAssistantFields;
   "migrations/backfillReportFactObservedAt": typeof migrations_backfillReportFactObservedAt;
   "migrations/backfillReportingCycleStart": typeof migrations_backfillReportingCycleStart;
   "migrations/backfillStoreCurrencyCase": typeof migrations_backfillStoreCurrencyCase;
@@ -1083,6 +1096,8 @@ declare const fullApi: ApiFromModules<{
   "operationAdmission/domains/_shapes": typeof operationAdmission_domains__shapes;
   "operationAdmission/domains/agentHarness_definitions": typeof operationAdmission_domains_agentHarness_definitions;
   "operationAdmission/domains/agentHarness_readDefinitions": typeof operationAdmission_domains_agentHarness_readDefinitions;
+  "operationAdmission/domains/catalogAccess_definitions": typeof operationAdmission_domains_catalogAccess_definitions;
+  "operationAdmission/domains/catalogAccess_readDefinitions": typeof operationAdmission_domains_catalogAccess_readDefinitions;
   "operationAdmission/domains/httpCore_definitions": typeof operationAdmission_domains_httpCore_definitions;
   "operationAdmission/domains/httpCore_readDefinitions": typeof operationAdmission_domains_httpCore_readDefinitions;
   "operationAdmission/domains/httpCustomer_definitions": typeof operationAdmission_domains_httpCustomer_definitions;
@@ -1344,6 +1359,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
+  "schemas/inventory/catalogAccessToken": typeof schemas_inventory_catalogAccessToken;
   "schemas/inventory/catalogSummary": typeof schemas_inventory_catalogSummary;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
@@ -1511,8 +1527,10 @@ declare const fullApi: ApiFromModules<{
   "stockOps/purchaseOrders": typeof stockOps_purchaseOrders;
   "stockOps/receiving": typeof stockOps_receiving;
   "stockOps/replenishment": typeof stockOps_replenishment;
+  "stockOps/stockState": typeof stockOps_stockState;
   "stockOps/vendors": typeof stockOps_vendors;
   "storeFront/analytics": typeof storeFront_analytics;
+  "storeFront/assistantCatalog": typeof storeFront_assistantCatalog;
   "storeFront/auth": typeof storeFront_auth;
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;

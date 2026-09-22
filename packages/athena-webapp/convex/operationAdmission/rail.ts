@@ -43,7 +43,10 @@ import type {
   OperationReadDefinition,
   OperationResourceGuards,
 } from "./types";
-import { OPERATION_INGRESS_CLAIM_ARG } from "./types";
+import {
+  CATALOG_READER_REJECTION_BODY,
+  OPERATION_INGRESS_CLAIM_ARG,
+} from "./types";
 
 export type AdmissionEntrypointArgs = {
   operationId: string;
@@ -407,12 +410,24 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
    * from its message. The body is fixed so a denial reveals nothing about why
    * — probing the difference between "wrong store" and "no such row" is the
    * exact thing the ownership denials are shaped to prevent.
+   *
+   * ONE EXCEPTION, and it reveals nothing either. A catalogue reader is a
+   * program, not a browser: it has to tell "my credential is no longer
+   * accepted" (stop calling, ask an operator for a new token) from "that
+   * server is unwell" (retry later), and it cannot ask a person. So a refusal
+   * raised BY that adapter answers with a fixed, vendor-neutral code and no
+   * detail — still one body for every reason, still nothing about which store
+   * exists. Which adapter refused is typed data on the error, like the
+   * 401/403 split itself.
    */
   function admissionDenialResponse(c: Context, error: unknown) {
     const denial = operationAdmissionDenialData(error);
     if (!denial) return undefined;
-    return denial.outcome === "unauthenticated"
-      ? c.json({ error: "Authentication required." }, 401)
+    if (denial.outcome === "unauthenticated") {
+      return c.json({ error: "Authentication required." }, 401);
+    }
+    return denial.adapter === "catalog_reader"
+      ? c.json(CATALOG_READER_REJECTION_BODY, 403)
       : c.json({ error: "Request rejected." }, 403);
   }
 
@@ -455,6 +470,12 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
 
   /**
    * Admission for a Hono read route: an internal query, no write, no capture.
+   *
+   * "No write" is about ADMISSION: the rail itself records nothing for a read.
+   * A handler may still call a mutation of its own — `GET /storefront` mints a
+   * guest, and the assistant catalogue search stamps its credential's
+   * `lastUsedAt` — and each of those is an explicit, documented side channel
+   * on its definition, not something this wrapper does on a route's behalf.
    */
   function admitHttpRead(
     definition: OperationReadDefinition,

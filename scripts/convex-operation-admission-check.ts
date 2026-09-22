@@ -375,6 +375,8 @@ export const UNIT_OWNERSHIP: readonly UnitOwnership[] = [
     unit: "U4",
     files: [
       "inventory/auth.ts",
+      "inventory/catalogAccess.ts",
+      "inventory/catalogAccessAdapter.ts",
       "inventory/expenseSessionItems.ts",
       "inventory/expenseSessions.ts",
       "inventory/expenseTransactions.ts",

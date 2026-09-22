@@ -31,10 +31,10 @@ import { known, unknown } from "../../../shared/agentHarness/results";
 import { listInventorySnapshotForProductSkusWithCtx } from "../adjustments";
 import { listBoundedReplenishmentRecommendationsWithCtx } from "../replenishment";
 import { POSITIONS_PORT_KEY, REPLENISHMENT_PORT_KEY } from "./inventory";
+import { stockStateOf } from "../stockState";
 
 const SKU_REF_KIND = "product_sku";
 const RECOMMENDATION_REF_KIND = "replenishment_recommendation";
-const LOW_STOCK_THRESHOLD = 5;
 /**
  * The recommendation derivation is a global sort over the store's catalogue, so
  * the read is bounded at the source to keep one call within the page cost the
@@ -54,11 +54,6 @@ export const REPLENISHMENT_SKU_CEILING = 1_500;
 export const REPLENISHMENT_PURCHASE_ORDER_CEILING = 200;
 
 type PositionRow = Awaited<ReturnType<typeof listInventorySnapshotForProductSkusWithCtx>>[number];
-
-function stockStateOf(available: number): "in_stock" | "low" | "out" {
-  if (available <= 0) return "out";
-  return available <= LOW_STOCK_THRESHOLD ? "low" : "in_stock";
-}
 
 function variantLabelOf(row: PositionRow): string | undefined {
   const parts = [row.size, row.colorName, row.length !== undefined ? `${row.length}in` : undefined].filter(

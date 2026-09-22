@@ -7,6 +7,8 @@ const availabilityValidator = v.union(
 );
 
 export const productSkuSearchSchema = v.object({
+  assistantSearchText: v.optional(v.string()),
+  assistantVisible: v.optional(v.boolean()),
   attributes: v.optional(
     v.record(
       v.string(),

@@ -13,7 +13,7 @@ applies_when:
   - "A caller can retry, so a denial has to be machine-actionable"
   - "A deletion cascade has to be audited against what rows actually carry"
 tags: [athena, convex, agent-harness, delegated-authority, field-omission, denials, retention, rendering]
-delivery_diff_fingerprint: 6b9c64cc49ad0ebd53e183191ae119b9745bb783c57799206675d5b43beb7890
+delivery_diff_fingerprint: 21ea79953bbd4f84b101c9da949be06f0c927953c24063981a160a567fe5e1a6
 ---
 
 # Answering A Caller That Is Not A Person
@@ -224,8 +224,12 @@ carry store-authored text and a destination must not be steerable by it.
 
 ## Prevention
 
-- Add a caller kind by giving it a derived grant and one authority port, not by
-  adding an actor kind. Assert the actor union is unchanged.
+- Add a DELEGATED caller — one that acts on a person's behalf — by giving it a
+  derived grant and one authority port, not by adding an actor kind. Assert no
+  delegated kind enters the actor union. A caller presenting its own
+  credential and acting for itself is the other case: that is ingress
+  identity, and it is an actor kind, declared on every definition exactly as
+  the rest of the coverage is (`catalog_reader`, V26-2097).
 - Assert absence, not zero: `expect(JSON.stringify(row)).not.toContain('"field"')`
   is the shape of the test. Characterize the existing screen's substituted zero
   first, so the difference is on the record.

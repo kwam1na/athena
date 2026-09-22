@@ -10,6 +10,7 @@ export type OperationActorKind =
   | "normal_user"
   | "shared_demo"
   | "storefront_customer"
+  | "catalog_reader"
   | "public";
 
 export type OperationActor =
@@ -34,6 +35,17 @@ export type OperationActor =
       storeId: Id<"store">;
       storeFrontUserId?: Id<"storeFrontUser">;
       guestId?: Id<"guest">;
+    }
+  | {
+      // An external reader presenting a per-store catalogue access token. The
+      // credential is a secret this server minted and stores only as a hash,
+      // so possession is evidence the store issued it — but it authenticates a
+      // CALLER, not a person: it carries no Athena identity and confers no
+      // authority beyond the store it was minted for.
+      kind: "catalog_reader";
+      assurance: "bearer_token";
+      storeId: Id<"store">;
+      tokenId: Id<"catalogAccessToken">;
     }
   | {
       // Anonymous caller — no identity at all. Only admitted for operations
@@ -141,6 +153,10 @@ export type OperationActorCoverage = {
   sharedDemo: "admit" | "deny";
   // Storefront bearer-claim shoppers. Valid only on http/http_read kinds.
   storefrontCustomer?: "admit" | "deny";
+  // Token-bearing catalogue readers. Valid only on http_read kinds, where it
+  // is REQUIRED — the same "stated everywhere, defaulted nowhere" rule the
+  // other coverage keys follow.
+  catalogReader?: "admit" | "deny";
   // Anonymous callers. Required on every definition; deny by default nowhere —
   // it must be stated.
   public: "admit" | "deny";
@@ -309,7 +325,28 @@ export type OperationIngressClaim = {
   storeFrontUserId?: Id<"storeFrontUser">;
   guestId?: Id<"guest">;
   storeId?: Id<"store">;
+  /**
+   * Lowercase hex SHA-256 of a well-formed `X-Assistant-Token` header value.
+   *
+   * The extractor hashes; it verifies nothing. Whether a hash names a live
+   * token is the adapter's question, and the raw header value never travels
+   * past the hash so an admission argument record cannot carry a credential.
+   */
+  catalogAccessTokenHash?: string;
 };
+
+/**
+ * The refusal body a rejected catalogue-access credential receives.
+ *
+ * Vendor-neutral and fixed: the reader that presented the token is a program,
+ * and it distinguishes "my credential is no longer accepted" from "that
+ * server is unwell" by this exact body on a 403. Every other refusal on the
+ * rail keeps the opaque `{ error }` shape, so this code is only ever emitted
+ * for a credential the catalogue-reader adapter itself rejected.
+ */
+export const CATALOG_READER_REJECTION_BODY = {
+  code: "reference_token_rejected",
+} as const;
 
 export type OperationIngress = {
   rawBody: string;
