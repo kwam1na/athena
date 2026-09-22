@@ -1,4 +1,4 @@
-import { Product, ProductSku } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku } from "@athena/contracts";
 import { sortHomepageRankedItems } from "@athena/contracts/homepageRanking";
 import type {
   HomepageSnapshotHighlightedItemV1,
@@ -13,7 +13,6 @@ export type HomepageDisplaySku = {
   productName: string;
   images: string[];
   price: number;
-  netPrice?: number;
   quantityAvailable: number;
   colorName?: string | null;
   size?: string;
@@ -30,16 +29,16 @@ type FeaturedItem = {
   _id?: string;
   rank?: number;
   type?: string;
-  product?: Product | HomepageDisplayProduct;
+  product?: PublicCatalogProduct | HomepageDisplayProduct;
   category?: {
     name: string;
-    products: Array<Product | HomepageDisplayProduct>;
+    products: Array<PublicCatalogProduct | HomepageDisplayProduct>;
     slug: string;
   };
   subcategory?: {
     categorySlug?: string;
     name: string;
-    products: Array<Product | HomepageDisplayProduct>;
+    products: Array<PublicCatalogProduct | HomepageDisplayProduct>;
     slug: string;
   };
   productId?: string;
@@ -48,7 +47,7 @@ type FeaturedItem = {
 type BestSellerItem = {
   _id?: string;
   rank?: number;
-  productSku: ProductSku | HomepageDisplaySku;
+  productSku: PublicCatalogSku | HomepageDisplaySku;
 };
 
 function toDisplaySku(sku: HomepageSnapshotSkuV1): HomepageDisplaySku {
@@ -59,7 +58,6 @@ function toDisplaySku(sku: HomepageSnapshotSkuV1): HomepageDisplaySku {
     productName: sku.productName,
     images: sku.imageUrls,
     price: sku.priceAmountMinor,
-    netPrice: sku.netPriceAmountMinor ?? undefined,
     quantityAvailable: sku.quantityAvailable,
     colorName: sku.colorName,
     size: sku.size ?? undefined,
@@ -105,7 +103,7 @@ export function resolveHomepageContent({
   featured,
 }: {
   snapshot?: HomepageSnapshotV1;
-  bestSellers?: Array<{ rank?: number; productSku: ProductSku }>;
+  bestSellers?: Array<{ rank?: number; productSku: PublicCatalogSku }>;
   featured?: FeaturedItem[];
 }) {
   const snapshotBestSellers: BestSellerItem[] | undefined =

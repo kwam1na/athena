@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { SheetTrigger } from "@/components/ui/sheet";
 import { getProductName } from "@/lib/productUtils";
 import { Link } from "@tanstack/react-router";
@@ -9,7 +9,7 @@ import { ShoppingBagAction } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
-// Product Details Section
+// PublicCatalogProduct Details Section
 export function PickupDetails({
   showShippingPolicy,
 }: {
@@ -39,12 +39,12 @@ export function PickupDetails({
   );
 }
 
-// Bag Product Summary
+// Bag PublicCatalogProduct Summary
 export function BagProduct({
   product,
   action,
 }: {
-  product: ProductSku;
+  product: PublicCatalogSku;
   action: ShoppingBagAction;
 }) {
   const actionText =

@@ -1,4 +1,4 @@
-import { Product, ProductSku } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku } from "@athena/contracts";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 
@@ -9,9 +9,9 @@ export function ProductAttribute({
   density = "default",
   className = "",
 }: {
-  product: Product;
-  selectedSku: ProductSku;
-  setSelectedSku: (sku: ProductSku) => void;
+  product: PublicCatalogProduct;
+  selectedSku: PublicCatalogSku;
+  setSelectedSku: (sku: PublicCatalogSku) => void;
   density?: "default" | "compact";
   className?: string;
 }) {

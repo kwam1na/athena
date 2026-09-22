@@ -1,9 +1,9 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 
 export const ProductAttributes = ({
   productSku,
   productAttributes,
 }: {
-  productSku: ProductSku;
+  productSku: PublicCatalogSku;
   productAttributes: Record<string, any>;
 }) => {};

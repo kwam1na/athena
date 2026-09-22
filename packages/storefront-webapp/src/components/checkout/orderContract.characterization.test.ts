@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { OnlineOrder, ProductSku, Store, StoreFrontUser } from "@athena/contracts";
+import type { OnlineOrder, PublicCatalogSku, Store, StoreFrontUser } from "@athena/contracts";
 
 import { formatDeliveryAddress, getOrderAmount, getPotentialPoints } from "./utils";
 import type { Address } from "./types";
@@ -157,7 +157,7 @@ describe("shared DTO contracts keep their Convex-backed shape", () => {
       productName: "Wig",
       colorName: "black",
       length: 18,
-    } as unknown as ProductSku;
+    } as unknown as PublicCatalogSku;
 
     expect(orderId).toBe("order_1");
     expect(orderAmount).toBe(20_000);

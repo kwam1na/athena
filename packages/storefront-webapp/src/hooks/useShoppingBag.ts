@@ -18,7 +18,7 @@ import { useBagQueries } from "@/lib/queries/bag";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import {
   BagItem,
-  ProductSku,
+  PublicCatalogSku,
   PromoCodeItem,
   SavedBagItem,
 } from "@athena/contracts";

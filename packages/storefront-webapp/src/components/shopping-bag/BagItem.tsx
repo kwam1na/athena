@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { motion } from "framer-motion";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { formatStoredAmount } from "@/lib/currency";
@@ -11,7 +11,7 @@ type BagItemProps = {
     secondary: JSX.Element; // Icon for secondary action
   };
   onPrimaryAction: (data: { quantity: number; itemId: number }) => void; // Function to handle primary action
-  onSecondaryAction: (item: ProductSku) => void; // Function to handle secondary action
+  onSecondaryAction: (item: PublicCatalogSku) => void; // Function to handle secondary action
   isUpdating: boolean; // Whether the bag is being updated
   formatter: Intl.NumberFormat; // Function to format currency or numbers
   bagAction: string; // The current bag action (e.g., 'delete', 'move')

@@ -1,11 +1,11 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { Check, CheckCheck, Dumbbell, Factory, Gem, Ruler } from "lucide-react";
 
 export const AboutProduct = ({
   productSku,
   productAttributes,
 }: {
-  productSku: ProductSku;
+  productSku: PublicCatalogSku;
   productAttributes: Record<string, any>;
 }) => {
   const { wigMake, wigTexture } = productAttributes || {};

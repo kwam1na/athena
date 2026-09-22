@@ -1,5 +1,5 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product, ProductSku } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku } from "@athena/contracts";
 import { Link, useParams } from "@tanstack/react-router";
 import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
@@ -25,8 +25,8 @@ export default function ProductsPage({
   isLoading,
 }: {
   isLoading: boolean;
-  products?: Product[];
-  productSkus?: ProductSku[];
+  products?: PublicCatalogProduct[];
+  productSkus?: PublicCatalogSku[];
 }) {
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -118,7 +118,7 @@ export default function ProductsPage({
         ))}
 
       {!isLoading &&
-        products?.flatMap((product: Product) => (
+        products?.flatMap((product: PublicCatalogProduct) => (
           <Link
             to="/shop/product/$productSlug"
             key={`${product?._id}}`}

@@ -1,5 +1,5 @@
 import { capitalizeWords } from "@/lib/utils";
-import { Product, ProductSku } from "@athena/contracts";
+import { PublicCatalogProduct, PublicCatalogSku } from "@athena/contracts";
 import {
   useProductDiscount,
   useProductDiscounts,
@@ -8,14 +8,14 @@ import { formatStoredAmount } from "@/lib/currency";
 import ImageWithFallback from "./ui/image-with-fallback";
 
 type ProductCardSku = Pick<
-  ProductSku,
+  PublicCatalogSku,
   "images" | "price" | "productName" | "quantityAvailable" | "sku"
 > & {
   _id: string;
   color?: string;
 };
 
-type ProductCardProduct = Pick<Product, "name"> & {
+type ProductCardProduct = Pick<PublicCatalogProduct, "name"> & {
   _id: string;
   skus: ProductCardSku[];
 };

@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 import { getProductName } from "@/lib/productUtils";
 import { SellingFastSignal, SoldOutBadge } from "./InventoryLevelBadge";
 import { useProductQueries } from "@/lib/queries/product";
@@ -9,7 +9,7 @@ import { ReviewSummary } from "./ReviewSummary";
 import { formatStoredAmount } from "@/lib/currency";
 
 interface ProductInfoProps {
-  selectedSku: ProductSku;
+  selectedSku: PublicCatalogSku;
   formatter: Intl.NumberFormat;
   isSoldOut: boolean;
   isLowStock: boolean;

@@ -21,7 +21,7 @@ import { formatStoredAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
-import { ProductSku } from "@athena/contracts";
+import { PublicCatalogSku } from "@athena/contracts";
 
 export type BagSummaryItem = {
   colorName?: string | null;
@@ -36,7 +36,7 @@ export type BagSummaryItem = {
   size?: string;
 };
 
-export function toBagSummaryItems(items: ProductSku[]): BagSummaryItem[] {
+export function toBagSummaryItems(items: PublicCatalogSku[]): BagSummaryItem[] {
   const summarizedItems = new Map<string, BagSummaryItem>();
 
   items.forEach((item) => {
