@@ -1015,19 +1015,57 @@ export async function searchAssistantVisibleProductSkusWithCtx(
         .take(TEXT_CANDIDATE_READ_LIMIT),
     ]);
 
-  const candidates = [
+  // Hydration is memoised: a SKU reached by both the exact lookup and the
+  // text index is read once, so resolving the exact candidates early costs
+  // nothing at emission time.
+  const hydrated = new Map<string, ProductSkuSearchProjection | null>();
+  const resolve = async (productSkuId: Id<"productSku">) => {
+    const key = String(productSkuId);
+    if (!hydrated.has(key)) {
+      hydrated.set(
+        key,
+        (await hydrateCanonicalProjection(ctx, {
+          productSkuId,
+          storeId: args.storeId,
+        })) ?? null,
+      );
+    }
+    return hydrated.get(key) ?? null;
+  };
+
+  // An exact SKU-code match puts its product at the front of the answer.
+  // Granting that from the raw row would let a hidden SKU — or one whose code
+  // is really its barcode — hoist a product it must not be able to name, and
+  // a caller could read the guessed code back out of the ordering. So the
+  // exact candidates are resolved before they are allowed to rank anything.
+  const exactCandidates: Array<{
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+  }> = [];
+  for (const candidate of [
     ...exactSourceRows.map((row) => ({
-      exactSkuCode: true,
       productId: row.productId,
       productSkuId: row._id,
     })),
     ...exactProjectionRows.map((row) => ({
-      exactSkuCode: true,
       productId: row.productId,
       productSkuId: row.productSkuId,
     })),
+  ]) {
+    const projection = await resolve(candidate.productSkuId);
+    if (!projection || !isProjectionAssistantVisible(projection)) continue;
+    if (
+      projection.normalizedSku !== undefined &&
+      projection.normalizedSku === projection.normalizedBarcode
+    ) {
+      continue;
+    }
+    exactCandidates.push(candidate);
+  }
+
+  const candidates = [
+    ...exactCandidates,
     ...textCandidates.map((row) => ({
-      exactSkuCode: false,
       productId: row.productId,
       productSkuId: row.productSkuId,
     })),
@@ -1051,10 +1089,6 @@ export async function searchAssistantVisibleProductSkusWithCtx(
     if (bucket.some((row) => row.productSkuId === candidate.productSkuId)) {
       continue;
     }
-    if (bucket.length >= ASSISTANT_CATALOG_OPTIONS_PER_MATCH_LIMIT) {
-      truncated = true;
-      continue;
-    }
     bucket.push(candidate);
   }
 
@@ -1063,28 +1097,22 @@ export async function searchAssistantVisibleProductSkusWithCtx(
     const bucket = buckets.get(productKey) ?? [];
     const options: ProductSkuSearchProjection[] = [];
     for (const candidate of bucket) {
-      const projection = await hydrateCanonicalProjection(ctx, {
-        productSkuId: candidate.productSkuId,
-        storeId: args.storeId,
-      });
+      const projection = await resolve(candidate.productSkuId);
       // Visibility is re-derived from the canonical rows, never trusted from
       // the index: the projection can lag a hide by one write.
       if (!projection || !isProjectionAssistantVisible(projection)) continue;
-      // A SKU whose code IS its barcode was never in the index; letting the
-      // exact lookup answer for it would confirm a barcode by other means.
-      if (
-        candidate.exactSkuCode &&
-        projection.normalizedSku !== undefined &&
-        projection.normalizedSku === projection.normalizedBarcode
-      ) {
-        continue;
+      // The per-product limit is spent the same way as the match limit:
+      // on options that can actually appear. Counting candidate rows here
+      // would let a hidden SKU push a visible one out of a crowded product.
+      if (options.length >= ASSISTANT_CATALOG_OPTIONS_PER_MATCH_LIMIT) {
+        truncated = true;
+        break;
       }
       options.push(projection);
     }
-    // The limit is spent on products that can actually appear, not on
-    // candidate rows: a hidden SKU or a code-that-is-a-barcode hydrates to no
-    // options, so it can never take a match slot or set `truncated` and make
-    // itself readable through the count.
+    // Neither limit is spent on candidate rows: a hidden SKU or a
+    // code-that-is-a-barcode hydrates to nothing, so it can never take a slot
+    // or set `truncated` and make itself readable through the count.
     if (options.length === 0) continue;
     if (products.length >= args.limit) {
       truncated = true;

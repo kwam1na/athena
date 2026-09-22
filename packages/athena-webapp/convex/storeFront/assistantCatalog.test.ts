@@ -60,6 +60,9 @@ type Seeded = {
 async function seedStore(
   t: ReturnType<typeof convexTest>,
   extraVisibleBobProducts = 0,
+  visibleSkusBesideTheHiddenOne = 0,
+  hiddenSkusSharingTheHiddenCode = 0,
+  skusHiddenAfterProjection = 0,
 ): Promise<Seeded> {
   return await t.run(async (ctx) => {
     const createdByUserId = await ctx.db.insert("athenaUser", {
@@ -198,6 +201,31 @@ async function seedStore(
         sku: HIDDEN_SKU_CODE,
       }),
     );
+    // Several hidden SKUs can carry the same code, so one code can produce
+    // more candidate rows than a product is allowed to show options.
+    for (let index = 0; index < hiddenSkusSharingTheHiddenCode; index += 1) {
+      skus.push(
+        await sku(hiddenSkuProduct, {
+          barcode: `590123412348${index}`,
+          isVisible: false,
+          length: 30 + index,
+          productName: "Hidden bob wig",
+          sku: HIDDEN_SKU_CODE,
+        }),
+      );
+    }
+    // The hidden SKU can share a product with visible ones. That is the shape
+    // in which a per-product option slot is worth something to a caller.
+    for (let index = 0; index < visibleSkusBesideTheHiddenOne; index += 1) {
+      skus.push(
+        await sku(hiddenSkuProduct, {
+          barcode: `590123412347${index}`,
+          length: 10 + index,
+          productName: "Hidden bob wig",
+          sku: `HID-SIB-${index}`,
+        }),
+      );
+    }
 
     const draft = await product({
       availability: "draft",
@@ -231,10 +259,38 @@ async function seedStore(
       );
     }
 
+    // Rows the index still calls visible because the projection has not
+    // caught up with the hide yet. They are real candidates that hydrate to
+    // nothing, which is the only way a stale row reaches the option limit.
+    const stale: Id<"productSku">[] = [];
+    if (skusHiddenAfterProjection > 0) {
+      const staleProduct = await product({
+        name: "Stale bob wig",
+        slug: "stale-bob-wig",
+      });
+      for (let index = 0; index < skusHiddenAfterProjection; index += 1) {
+        stale.push(
+          await sku(staleProduct, {
+            barcode: `590123412349${index}`,
+            length: 40 + index,
+            productName: "Stale bob wig",
+            sku: `STALE-${index}`,
+          }),
+        );
+      }
+      skus.push(...stale);
+    }
+
     for (const productSkuId of skus) {
       await upsertProductSkuSearchProjection(ctx, productSkuId, {
         advanceRevision: false,
       });
+    }
+
+    // The hide lands after the projection is written, so the index keeps
+    // saying `assistantVisible: true` until the next write.
+    for (const productSkuId of stale) {
+      await ctx.db.patch("productSku", productSkuId, { isVisible: false });
     }
 
     return { otherStoreId, storeId };
@@ -501,6 +557,58 @@ describe("nothing private can change the answer", () => {
     expect(hidden.matches).toEqual(nonexistent.matches);
     expect(hidden.hasMore).toBe(nonexistent.hasMore);
     expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
+  });
+
+  it("answers a hidden SKU's code the same way at the option limit", async () => {
+    const t = convexTest(schema, modules);
+    // Eight visible SKUs beside the hidden one fills the per-product option
+    // limit exactly, so an option slot spent on the hidden row would push a
+    // visible option out of the answer and set `hasMore`.
+    const { storeId } = await seedStore(t, 0, 8);
+
+    const hidden = await ask(t, storeId, HIDDEN_SKU_CODE);
+    const nonexistent = await ask(t, storeId, NONEXISTENT_SKU_CODE);
+
+    const crowded = hidden.matches.find(
+      (match) => match.productSlug === "hidden-bob-wig",
+    );
+    expect(crowded?.options).toHaveLength(8);
+    expect(hidden.matches).toEqual(nonexistent.matches);
+    expect(hidden.hasMore).toBe(nonexistent.hasMore);
+    expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
+  });
+
+  it("answers a hidden SKU's code the same way when it overflows the option limit", async () => {
+    const t = convexTest(schema, modules);
+    // Nine hidden SKUs share the one code, so the code alone produces more
+    // candidate rows for that product than the option limit allows. None of
+    // them can be shown, so none of them may be counted either.
+    const { storeId } = await seedStore(t, 0, 0, 9);
+
+    const hidden = await ask(t, storeId, HIDDEN_SKU_CODE);
+    const nonexistent = await ask(t, storeId, NONEXISTENT_SKU_CODE);
+
+    expect(
+      hidden.matches.map((match) => match.productSlug),
+    ).not.toContain("hidden-bob-wig");
+    expect(hidden.matches).toEqual(nonexistent.matches);
+    expect(hidden.hasMore).toBe(nonexistent.hasMore);
+    expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
+  });
+
+  it("does not claim more matches for rows the index has not caught up with", async () => {
+    const t = convexTest(schema, modules);
+    // Nine SKUs hidden after their projection was written: the text index
+    // still offers them, hydration drops every one. A product that shows
+    // nothing must not report that something was left out.
+    const { storeId } = await seedStore(t, 0, 0, 0, 9);
+
+    const body = await ask(t, storeId, "bob", 10);
+
+    expect(
+      body.matches.map((match) => match.productSlug),
+    ).not.toContain("stale-bob-wig");
+    expect(body.hasMore).toBe(false);
   });
 
   it("omits the code of a SKU whose code is really its barcode", async () => {

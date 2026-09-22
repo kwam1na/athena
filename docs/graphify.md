@@ -53,7 +53,9 @@ not a reviewable artifact.
 ## Python Runtime
 
 Graphify itself is a Python package. The repo pins it in
-`.graphify-requirements.txt` (`graphifyy==0.4.12` today).
+`.graphify-requirements.txt` (`graphifyy==0.4.12` today). `networkx` is pinned
+there too: community detection partitions differently across its releases, so
+an unpinned resolve makes CI call the committed graph stale.
 
 Install or repair the local runtime with:
 
