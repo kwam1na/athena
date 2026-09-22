@@ -578,6 +578,20 @@ describe("nothing private can change the answer", () => {
     expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
   });
 
+  it("caps a crowded product at eight options and says the answer was cut", async () => {
+    const t = convexTest(schema, modules);
+    // Nine visible SKUs under one product: one more than a product may show.
+    const { storeId } = await seedStore(t, 0, 9);
+
+    const body = await ask(t, storeId, HIDDEN_SKU_CODE);
+
+    const crowded = body.matches.find(
+      (match) => match.productSlug === "hidden-bob-wig",
+    );
+    expect(crowded?.options).toHaveLength(8);
+    expect(body.hasMore).toBe(true);
+  });
+
   it("answers a hidden SKU's code the same way when it overflows the option limit", async () => {
     const t = convexTest(schema, modules);
     // Nine hidden SKUs share the one code, so the code alone produces more
