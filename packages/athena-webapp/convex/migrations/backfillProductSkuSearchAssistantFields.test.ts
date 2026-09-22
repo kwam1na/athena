@@ -293,6 +293,37 @@ describe("product SKU search assistant field backfill", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
+  it("refreshes a projection row written before the assistant fields", async () => {
+    const { ctx, tables } = createCtx(seedStore(3));
+
+    await drainBackfill(ctx, { dryRun: false, limit: 3 });
+
+    // The migration's actual production input: a projection row that exists
+    // and is otherwise current, but predates the two assistant keys.
+    const legacy = [...tables.productSkuSearch.values()][0];
+    delete legacy.assistantSearchText;
+    delete legacy.assistantVisible;
+
+    const preview = await drainBackfill(ctx, { dryRun: true, limit: 3 });
+    expect(preview.totals).toMatchObject({
+      missingProjectionCount: 0,
+      pendingCount: 1,
+    });
+
+    const applied = await drainBackfill(ctx, { dryRun: false, limit: 3 });
+    expect(applied.totals).toMatchObject({
+      unchangedCount: 2,
+      upsertedCount: 1,
+    });
+    const refreshed = tables.productSkuSearch.get(legacy._id);
+    expect(refreshed?.assistantSearchText).toBeDefined();
+    expect(refreshed?.assistantVisible).toBe(true);
+
+    // The coverage gate the operator reads before minting is closed.
+    const after = await drainBackfill(ctx, { dryRun: true, limit: 3 });
+    expect(after.totals.pendingCount).toBe(0);
+  });
+
   it("leaves the POS register catalog revision untouched", async () => {
     const { ctx } = createCtx(seedStore(3));
 

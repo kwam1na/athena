@@ -14,7 +14,7 @@ root_cause: missing_permission
 resolution_type: code_fix
 severity: critical
 tags: [athena, convex, catalogue, bearer-token, operation-admission, projection, search-index]
-delivery_diff_fingerprint: 21ea79953bbd4f84b101c9da949be06f0c927953c24063981a160a567fe5e1a6
+delivery_diff_fingerprint: ae12c7eec8736669b91580f45a6d9beab3fdc288ab8c1ae9ee5a9bf2734639b1
 ---
 
 # A Token-Resolved Catalogue Read For A Caller That Is Not A Person

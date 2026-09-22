@@ -9,6 +9,17 @@ import {
 } from "../platform/storefrontCookieSignature";
 import { getStorefrontClaimFromRequest } from "./utils";
 
+// The extractor must not hash a value that is not shaped like a minted token.
+// That is a claim about a call, not about a return value, so the real digest
+// is wrapped rather than replaced.
+vi.mock("../platform/storefrontCookieSignature", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../platform/storefrontCookieSignature")
+    >();
+  return { ...actual, sha256Hex: vi.fn(actual.sha256Hex) };
+});
+
 const SIGNING_SECRET = "test-storefront-cookie-secret";
 const TOKEN = `athcat_${"A".repeat(43)}`;
 
@@ -51,6 +62,7 @@ describe("ingress claim extraction", () => {
   });
 
   it("ignores a header that is not a minted token, without hashing it", async () => {
+    vi.mocked(sha256Hex).mockClear();
     for (const value of [
       "",
       "athcat_",
@@ -68,6 +80,10 @@ describe("ingress claim extraction", () => {
         undefined,
       ]);
     }
+    expect(vi.mocked(sha256Hex)).not.toHaveBeenCalled();
+
+    await claimFor({ "X-Assistant-Token": TOKEN });
+    expect(vi.mocked(sha256Hex)).toHaveBeenCalledTimes(1);
   });
 
   it("adds the token hash alongside a cookie claim without disturbing it", async () => {

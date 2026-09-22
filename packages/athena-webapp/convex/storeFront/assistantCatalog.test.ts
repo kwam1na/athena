@@ -40,7 +40,11 @@ const modules = Object.fromEntries(
 const REAL_BARCODE = "5901234123457";
 const FAKE_BARCODE = "5901234123999";
 const IMPORTED_BARCODE = "5901234123458";
-const HIDDEN_SKU_CODE = "HID-ONLY-1";
+// Both codes tokenize to "bob", so the text search finds the same visible
+// products for either one. The only difference between them is that one names
+// a hidden SKU, which is exactly the difference that must not be readable.
+const HIDDEN_SKU_CODE = "BOB-HID-1";
+const NONEXISTENT_SKU_CODE = "BOB-NON-1";
 
 type Seeded = {
   otherStoreId: Id<"store">;
@@ -53,7 +57,10 @@ type Seeded = {
  * draft product, a category that is off the storefront, and an imported SKU
  * whose code is really its barcode.
  */
-async function seedStore(t: ReturnType<typeof convexTest>): Promise<Seeded> {
+async function seedStore(
+  t: ReturnType<typeof convexTest>,
+  extraVisibleBobProducts = 0,
+): Promise<Seeded> {
   return await t.run(async (ctx) => {
     const createdByUserId = await ctx.db.insert("athenaUser", {
       email: "operator@example.com",
@@ -210,6 +217,19 @@ async function seedStore(t: ReturnType<typeof convexTest>): Promise<Seeded> {
     skus.push(
       await sku(offStorefront, { barcode: "5901234123463", sku: "IMP-1" }),
     );
+
+    for (let index = 0; index < extraVisibleBobProducts; index += 1) {
+      const extra = await product({
+        name: `Spare bob wig ${index}`,
+        slug: `spare-bob-wig-${index}`,
+      });
+      skus.push(
+        await sku(extra, {
+          productName: `Spare bob wig ${index}`,
+          sku: `SPARE-${index}`,
+        }),
+      );
+    }
 
     for (const productSkuId of skus) {
       await upsertProductSkuSearchProjection(ctx, productSkuId, {
@@ -457,12 +477,30 @@ describe("nothing private can change the answer", () => {
     const { storeId } = await seedStore(t);
 
     const hidden = await ask(t, storeId, HIDDEN_SKU_CODE);
-    const nonexistent = await ask(t, storeId, "NOT-A-CODE-1");
+    const nonexistent = await ask(t, storeId, NONEXISTENT_SKU_CODE);
 
-    expect(hidden.matches).toEqual([]);
+    expect(
+      hidden.matches.map((match) => match.productSlug),
+    ).not.toContain("hidden-bob-wig");
     expect(hidden.matches).toEqual(nonexistent.matches);
     expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
     expect(hidden.hasMore).toBe(nonexistent.hasMore);
+  });
+
+  it("answers a hidden SKU's code the same way at the match limit", async () => {
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    // At `limit: 1` the hidden row is the first candidate, so a match slot
+    // spent on it — rather than on a product that can be answered — would
+    // show up as a shorter answer and a different `hasMore`.
+    const hidden = await ask(t, storeId, HIDDEN_SKU_CODE, 1);
+    const nonexistent = await ask(t, storeId, NONEXISTENT_SKU_CODE, 1);
+
+    expect(hidden.matches).toHaveLength(1);
+    expect(hidden.matches).toEqual(nonexistent.matches);
+    expect(hidden.hasMore).toBe(nonexistent.hasMore);
+    expect(hidden.exhaustive).toBe(nonexistent.exhaustive);
   });
 
   it("omits the code of a SKU whose code is really its barcode", async () => {
@@ -543,5 +581,17 @@ describe("exhaustive and hasMore", () => {
     expect(body.matches).toHaveLength(1);
     expect(body.hasMore).toBe(true);
     expect(body.exhaustive).toBe(true);
+  });
+
+  it("stops claiming coverage once the text index fills its read window", async () => {
+    const t = convexTest(schema, modules);
+    // 61 is the candidate read window; the seed's own bob rows push the
+    // question past it, so the search cannot have seen the whole shop.
+    const { storeId } = await seedStore(t, 61);
+
+    const body = await ask(t, storeId, "bob");
+
+    expect(body.exhaustive).toBe(false);
+    expect(body.matches.length).toBeGreaterThan(0);
   });
 });

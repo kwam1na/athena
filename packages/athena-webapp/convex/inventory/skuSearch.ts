@@ -1044,10 +1044,6 @@ export async function searchAssistantVisibleProductSkusWithCtx(
     const productKey = String(candidate.productId);
     let bucket = buckets.get(productKey);
     if (!bucket) {
-      if (order.length >= args.limit) {
-        truncated = true;
-        continue;
-      }
       bucket = [];
       buckets.set(productKey, bucket);
       order.push(productKey);
@@ -1085,7 +1081,16 @@ export async function searchAssistantVisibleProductSkusWithCtx(
       }
       options.push(projection);
     }
-    if (options.length > 0) products.push({ options });
+    // The limit is spent on products that can actually appear, not on
+    // candidate rows: a hidden SKU or a code-that-is-a-barcode hydrates to no
+    // options, so it can never take a match slot or set `truncated` and make
+    // itself readable through the count.
+    if (options.length === 0) continue;
+    if (products.length >= args.limit) {
+      truncated = true;
+      break;
+    }
+    products.push({ options });
   }
 
   return {
