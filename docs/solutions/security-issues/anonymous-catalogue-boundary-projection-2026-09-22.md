@@ -13,7 +13,7 @@ root_cause: missing_validation
 resolution_type: code_fix
 severity: high
 tags: [convex, http-boundary, projection, catalogue, data-exposure, storefront]
-delivery_diff_fingerprint: 8bad982df791153e427f0966f8ee3e7e9c1811147c259d2169cd0692cdc855ad
+delivery_diff_fingerprint: a1a9b0ecf0b6a96473e89306cb4086a54ecbb7bd2cc171455cd6613dc4378ee0
 ---
 
 # Anonymous catalogue routes need a drop-only boundary projection, not a document spread
