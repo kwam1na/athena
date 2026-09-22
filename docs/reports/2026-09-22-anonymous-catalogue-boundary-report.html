@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Closing the anonymous catalogue boundary</title></head><body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="a1a9b0ecf0b6a96473e89306cb4086a54ecbb7bd2cc171455cd6613dc4378ee0">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="4bb1f27110965e7d64f4cb83990cb5a8a48608e548086f40e757bcf1f1d26af2">
 <header data-report-section="header"><h1>Closing the anonymous catalogue boundary</h1>
 <ul data-report-pills><li>Delivery candidate</li><li>Coordinated batch: V26-2093 + V26-2094</li><li>Two doors, both closed</li><li>704 backend tests green</li></ul>
 <dl data-report-meta>
 <dt>Scope</dt><dd>V26-2093 (drop-only public projection at the anonymous catalogue routes) and V26-2094 (close the nine public-admitted catalogue queries)</dd>
 <dt>Branch</dt><dd>codex/v26-2093-public-catalog-projection</dd>
 <dt>Base</dt><dd>origin/main 3d7a4ff7</dd>
-<dt>Deliverable diff fingerprint</dt><dd>a1a9b0ecf0b6a96473e89306cb4086a54ecbb7bd2cc171455cd6613dc4378ee0</dd>
+<dt>Deliverable diff fingerprint</dt><dd>4bb1f27110965e7d64f4cb83990cb5a8a48608e548086f40e757bcf1f1d26af2</dd>
 <dt>Tracker</dt><dd><a href="https://linear.app/v26-labs/issue/V26-2093">V26-2093</a> and <a href="https://linear.app/v26-labs/issue/V26-2094">V26-2094</a></dd>
 <dt>Status</dt><dd>Delivery candidate — not merged, not deployed</dd>
 </dl></header>
@@ -65,7 +65,8 @@
 <section data-report-section="validation"><h2>Evidence</h2>
 <p>Focused sensors on the delivered surface: <code>publicCatalog.test.ts</code>, <code>routes/products.test.ts</code>, <code>homepageSnapshot.test.ts</code> and <code>inventoryCatalogAdmission.test.ts</code> — 123 tests across 4 files, all passing. The admission rail suite (<code>convex/operationAdmission</code>, <code>convex/sharedDemo</code>, <code>convex/storeFront/operationAdapter.test.ts</code>, <code>convex/platform</code>, <code>convex/http</code>) passes 581 tests across 65 files, including the coverage test that keeps the generated caller table and downstream-write list current.</p>
 <p>Static sensors: <code>audit:convex</code> passes with operation-admission coverage green over 239 mutations, 249 queries, 35 actions and 94 HTTP ingresses; <code>lint:convex:changed</code> passes the pagination and return-validator contract checks over all nine changed Convex files; the root <code>convex-operation-admission-check.ts</code> reports zero findings. Project typechecks pass for <code>@athena/webapp</code> and <code>@athena/storefront-webapp</code>. The shared admission-checker documents were regenerated once after the merge, which is the reason the two tickets share a branch.</p>
-<p>One defect was found and fixed inside the candidate before review: a type rename had rewritten the word "Product" inside three prose comments in the storefront, producing text like "Bag PublicCatalogProduct Summary". The original wording is restored; no runtime or type change.</p>
+<p>Two defects were found and fixed inside the candidate. A type rename had rewritten the word "Product" inside three prose comments in the storefront, producing text like "Bag PublicCatalogProduct Summary"; the original wording is restored, with no runtime or type change. Review then raised a coverage gap: the snapshot had stopped emitting <code>netPriceAmountMinor</code> but nothing asserted its absence, so a reintroduction would have gone unseen. An absence assertion now sits beside the existing one for <code>price</code> in <code>homepageSnapshot.test.ts</code>.</p>
+<p>Two out-of-diff observations were deferred rather than expanded into this PR, each with a filed follow-up: <a href="https://linear.app/v26-labs/issue/V26-2108">V26-2108</a> projects <code>GET /stores/promoCodeItems</code>, which is a sixth anonymous route spreading the same documents outside this ticket's enumerated five, and <a href="https://linear.app/v26-labs/issue/V26-2109">V26-2109</a> fixes a pre-existing index mismatch in <code>promoCode.getAllItems</code> that this delivery does not touch.</p>
 <p>This is a pre-merge evidence snapshot. Merge, root alignment, Linear closure and deployment are not claimed here; the review round, the full <code>pr:athena</code> gate and CI remain to run against this candidate.</p>
 </section>
 
