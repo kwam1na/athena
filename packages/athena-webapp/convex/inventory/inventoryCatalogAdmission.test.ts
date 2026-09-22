@@ -198,23 +198,12 @@ describe("U3 inventory catalog operation definitions", () => {
     }
   });
 
-  it("admits anonymous readers only on the reads storefront routes serve", () => {
+  it("admits no anonymous readers: every catalogue route now calls an internal sibling", () => {
     const anonymous = INVENTORY_CATALOG_READ_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     ).map((definition) => definition.functionName);
 
-    expect(anonymous.sort()).toEqual(
-      [
-        "inventory/bannerMessage:getPublicActive",
-        "inventory/bestSeller:getAll",
-        "inventory/categories:getAll",
-        "inventory/colors:getAll",
-        "inventory/featuredItem:getAll",
-        "inventory/products:getByIdOrSlug",
-        "inventory/promoCode:getAll",
-        "inventory/subcategories:getAll",
-      ].sort(),
-    );
+    expect(anonymous).toEqual([]);
   });
 
   it("only admits the demo on reads whose intent is granted", () => {
@@ -533,7 +522,7 @@ describe("catalog read admission", () => {
     ).rejects.toThrow("Sign in again to continue.");
   });
 
-  it("admits an anonymous reader on a storefront-route read", async () => {
+  it("denies an anonymous reader on a storefront-route read (public is closed; the route calls the internal sibling)", async () => {
     const ctx = demoFoundationCtx();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
       new AthenaUnauthenticatedError(),
@@ -541,7 +530,7 @@ describe("catalog read admission", () => {
 
     await expect(
       getHandler(categories.getAll)(ctx, { storeId: "tenant-store" }),
-    ).resolves.toEqual([]);
+    ).rejects.toThrow("Sign in again to continue.");
   });
 
   it("denies a shared-demo reader on an ungranted read intent", async () => {
@@ -595,6 +584,63 @@ describe("catalog read admission", () => {
       getHandler(categories.getAll)(ctx, { storeId: "demo-store" }),
     ).resolves.toEqual([]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// The nine formerly public-admitted catalogue reads: every route already
+// calls an internal sibling, so closing `public` here does not change what
+// the storefront routes return, only what an anonymous Convex client can
+// reach directly.
+// ---------------------------------------------------------------------------
+
+const FORMERLY_PUBLIC_READS: Array<[string, unknown, Record<string, unknown>]> =
+  [
+    [
+      "bannerMessage:getPublicActive",
+      bannerMessage.getPublicActive,
+      { nowMs: 0, storeId: "tenant-store" },
+    ],
+    ["bestSeller:getAll", bestSeller.getAll, { storeId: "tenant-store" }],
+    ["categories:getAll", categories.getAll, { storeId: "tenant-store" }],
+    ["colors:getAll", colors.getAll, { storeId: "tenant-store" }],
+    ["featuredItem:getAll", featuredItem.getAll, { storeId: "tenant-store" }],
+    ["products:getAll", products.getAll, { storeId: "tenant-store" }],
+    [
+      "products:getByIdOrSlug",
+      products.getByIdOrSlug,
+      { identifier: "product-1", storeId: "tenant-store" },
+    ],
+    ["promoCode:getAll", promoCode.getAll, { storeId: "tenant-store" }],
+    [
+      "subcategories:getAll",
+      subcategories.getAll,
+      { storeId: "tenant-store" },
+    ],
+  ];
+
+describe("the nine formerly public-admitted catalogue reads close to anonymous callers", () => {
+  it.each(FORMERLY_PUBLIC_READS)(
+    "%s denies an anonymous caller",
+    async (_name, fn, args) => {
+      const ctx = demoFoundationCtx();
+      mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+        new AthenaUnauthenticatedError(),
+      );
+
+      await expect(getHandler(fn)(ctx, args)).rejects.toThrow(
+        "Sign in again to continue.",
+      );
+    },
+  );
+
+  it.each(FORMERLY_PUBLIC_READS)(
+    "%s still admits an authenticated operator",
+    async (_name, fn, args) => {
+      const ctx = demoFoundationCtx();
+
+      await expect(getHandler(fn)(ctx, args)).resolves.toBeDefined();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

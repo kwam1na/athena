@@ -385,8 +385,9 @@ export const getAll = query({
 });
 
 /**
- * Internal sibling for the anonymous `GET /stores/promoCodes` route. The public
- * export stays until wave B2 flips the route to this reference.
+ * Internal sibling for the anonymous `GET /stores/promoCodes` route, which
+ * calls this reference directly; the public export above stays closed to the
+ * public actor.
  */
 export const getAllInternal = internalQuery({
   args: { storeId: v.id("store") },
