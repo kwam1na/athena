@@ -1,0 +1,535 @@
+{
+  "spec": "delivery-run-export/1",
+  "labels": "self-attested; observability, not evidence; unbound to a record",
+  "runId": "run-e8b2557d8c68695d",
+  "events": [
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 1,
+      "at": "2026-09-22T15:28:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "run.started",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "v26-2093-2094",
+      "attestation": "self",
+      "payload": {
+        "host": "claude-code",
+        "ticket": "v26-2093-2094",
+        "workflow": {
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 2,
+      "at": "2026-09-22T15:29:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "00ff8f0d4c108acb1be99c9c1dc30615f41506d7",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Anonymous catalogue routes and Convex queries no longer expose internal product/SKU fields",
+          "acceptanceCriteria": [
+            "V26-2093 AC1: Anonymous responses at all five catalogue routes carry none of the dropped fields, on a cache hit and a miss.",
+            "V26-2093 AC2: A schema-enumeration test requires every key of productSchema and productSkuSchema to be in the keep or drop set.",
+            "V26-2093 AC3: Storefront listing, detail, bag and homepage render unchanged.",
+            "V26-2094 AC1: An anonymous Convex client calling any of the nine catalogue queries gets a thrown denial.",
+            "V26-2094 AC2: Authenticated operator calls still admit.",
+            "V26-2094 AC3: Admission check at zero findings; regenerated caller-table and downstream-writes documents committed."
+          ],
+          "finishLine": "PR merged with gates green"
+        },
+        "stage": "delivery",
+        "candidateTreeSha": "00ff8f0d4c108acb1be99c9c1dc30615f41506d7",
+        "candidateBinding": {
+          "deliverableDigest": "d01703e4521b05890e13c9cbbc2e042b10be6e7e8ffde2e4d58e5384f441a8de",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "23b5e26bd335f81eb358e208f41278e8e36edf5cd236e25e3f20ccc82784a586"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 3,
+      "at": "2026-09-22T15:29:21Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "00ff8f0d4c108acb1be99c9c1dc30615f41506d7",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Anonymous catalogue routes and Convex queries no longer expose internal product/SKU fields",
+          "acceptanceCriteria": [
+            "V26-2093 AC1: Anonymous responses at all five catalogue routes carry none of the dropped fields, on a cache hit and a miss.",
+            "V26-2093 AC2: A schema-enumeration test requires every key of productSchema and productSkuSchema to be in the keep or drop set.",
+            "V26-2093 AC3: Storefront listing, detail, bag and homepage render unchanged.",
+            "V26-2094 AC1: An anonymous Convex client calling any of the nine catalogue queries gets a thrown denial.",
+            "V26-2094 AC2: Authenticated operator calls still admit.",
+            "V26-2094 AC3: Admission check at zero findings; regenerated caller-table and downstream-writes documents committed."
+          ],
+          "finishLine": "PR merged with gates green"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "00ff8f0d4c108acb1be99c9c1dc30615f41506d7",
+        "candidateBinding": {
+          "deliverableDigest": "d01703e4521b05890e13c9cbbc2e042b10be6e7e8ffde2e4d58e5384f441a8de",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "23b5e26bd335f81eb358e208f41278e8e36edf5cd236e25e3f20ccc82784a586"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 4,
+      "at": "2026-09-22T15:29:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 5055
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 5,
+      "at": "2026-09-22T15:40:58Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 132020
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 6,
+      "at": "2026-09-22T15:43:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 652
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 7,
+      "at": "2026-09-22T15:43:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 605
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 8,
+      "at": "2026-09-22T15:43:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 577
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 9,
+      "at": "2026-09-22T15:44:01Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 975
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 10,
+      "at": "2026-09-22T15:44:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 625
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 11,
+      "at": "2026-09-22T15:44:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 1140
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 12,
+      "at": "2026-09-22T15:44:25Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 1600
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 13,
+      "at": "2026-09-22T15:44:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 1776
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 14,
+      "at": "2026-09-22T15:44:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 589
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 15,
+      "at": "2026-09-22T15:44:50Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 1873
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 16,
+      "at": "2026-09-22T15:46:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "a02b7407045832f06e46f1b926bc8328c677847b",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Anonymous catalogue routes and Convex queries no longer expose internal product/SKU fields",
+          "acceptanceCriteria": [
+            "V26-2093 AC1: Anonymous responses at all five catalogue routes carry none of the dropped fields, on a cache hit and a miss.",
+            "V26-2093 AC2: A schema-enumeration test requires every key of productSchema and productSkuSchema to be in the keep or drop set.",
+            "V26-2093 AC3: Storefront listing, detail, bag and homepage render unchanged.",
+            "V26-2094 AC1: An anonymous Convex client calling any of the nine catalogue queries gets a thrown denial.",
+            "V26-2094 AC2: Authenticated operator calls still admit.",
+            "V26-2094 AC3: Admission check at zero findings; regenerated caller-table and downstream-writes documents committed."
+          ],
+          "finishLine": "PR merged with gates green"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "a02b7407045832f06e46f1b926bc8328c677847b",
+        "candidateBinding": {
+          "deliverableDigest": "431f5e31bd3adb433bd56fece4ca960ec902b7811381653f9dca625cf61481f4",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "23b5e26bd335f81eb358e208f41278e8e36edf5cd236e25e3f20ccc82784a586"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 17,
+      "at": "2026-09-22T15:47:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "a02b7407045832f06e46f1b926bc8328c677847b",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Anonymous catalogue routes and Convex queries no longer expose internal product/SKU fields",
+          "acceptanceCriteria": [
+            "V26-2093 AC1: Anonymous responses at all five catalogue routes carry none of the dropped fields, on a cache hit and a miss.",
+            "V26-2093 AC2: A schema-enumeration test requires every key of productSchema and productSkuSchema to be in the keep or drop set.",
+            "V26-2093 AC3: Storefront listing, detail, bag and homepage render unchanged.",
+            "V26-2094 AC1: An anonymous Convex client calling any of the nine catalogue queries gets a thrown denial.",
+            "V26-2094 AC2: Authenticated operator calls still admit.",
+            "V26-2094 AC3: Admission check at zero findings; regenerated caller-table and downstream-writes documents committed."
+          ],
+          "finishLine": "PR merged with gates green"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "a02b7407045832f06e46f1b926bc8328c677847b",
+        "candidateBinding": {
+          "deliverableDigest": "431f5e31bd3adb433bd56fece4ca960ec902b7811381653f9dca625cf61481f4",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "23b5e26bd335f81eb358e208f41278e8e36edf5cd236e25e3f20ccc82784a586"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-e8b2557d8c68695d",
+      "seq": 18,
+      "at": "2026-09-22T16:31:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 2663164,
+        "digest": "c7b816bdaa07e6b64b9d2a2022f741c69b1c971e994138f25c63b299370692d8"
+      }
+    }
+  ],
+  "summary": {
+    "ticket": "v26-2093-2094",
+    "open": true,
+    "startedAt": "2026-09-22T15:28:59Z",
+    "lastAt": "2026-09-22T16:31:32Z",
+    "durationSeconds": 3753,
+    "phases": {
+      "implementationSeconds": 3753,
+      "reviewSeconds": 0,
+      "tailSeconds": 0,
+      "rounds": 0,
+      "gate": {
+        "totalMs": 2668219,
+        "counted": 2,
+        "unreadable": 0,
+        "unseen": false
+      }
+    },
+    "roundsOpened": 0,
+    "roundsClosed": 0,
+    "findings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    }
+  },
+  "costs": {
+    "review": {
+      "coverage": "unreported",
+      "unreportedEntries": 0,
+      "totals": []
+    },
+    "run": {
+      "coverage": "unreported"
+    }
+  },
+  "readout": {
+    "status": "incomplete",
+    "present": [
+      "run.started",
+      "command.completed:gate"
+    ],
+    "missing": [
+      "ticket.read",
+      "posture.declared",
+      "lens.selected",
+      "review.round.opened",
+      "review.round.closed",
+      "command.completed:record",
+      "pr.opened",
+      "run.ended"
+    ],
+    "violations": [
+      "gate-before-closed-round"
+    ],
+    "explanations": [
+      {
+        "violation": "gate-before-closed-round",
+        "because": "the governing gate completion at seq 18 has no closed round this row accepts: the journal carries no round whose latest opening is closed by its own latest close, so no closed round governs",
+        "blocksAdmission": false
+      }
+    ]
+  },
+  "refusedAppends": []
+}
