@@ -15,7 +15,7 @@ related_components:
   - assistant
   - tooling
 tags: [convex, projection, search-index, backfill, storefront-visibility, schema-evolution]
-delivery_diff_fingerprint: 41b5d971698f2f2abcddec7f3c62d40555c5947b5877fe64e607a5d7b97d09ba
+delivery_diff_fingerprint: 09942e4c54ed8c40f36db6f9b9bb640ffdc875fd3edb601e2841fc49e3966b4d
 ---
 
 # Optional projection fields plus a hand-run backfill for productSkuSearch
