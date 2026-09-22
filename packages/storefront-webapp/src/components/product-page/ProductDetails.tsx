@@ -9,7 +9,7 @@ import { ShoppingBagAction } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
-// PublicCatalogProduct Details Section
+// Product Details Section
 export function PickupDetails({
   showShippingPolicy,
 }: {
@@ -39,7 +39,7 @@ export function PickupDetails({
   );
 }
 
-// Bag PublicCatalogProduct Summary
+// Bag Product Summary
 export function BagProduct({
   product,
   action,

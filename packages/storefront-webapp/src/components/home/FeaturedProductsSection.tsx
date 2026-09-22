@@ -208,7 +208,7 @@ function FeaturedProduct({
 }
 
 /**
- * PublicCatalogProduct grid display component
+ * Product grid display component
  */
 function ProductGrid({
   products,
