@@ -907,10 +907,10 @@ const ASSISTANT_SEARCH_STOP_WORDS = new Set([
   "because", "been", "before", "being", "between", "both", "but", "can",
   "cannot", "could", "did", "does", "doing", "done", "each", "few", "for",
   "from", "had", "has", "have", "having", "her", "here", "hers", "him", "his",
-  "how", "into", "its", "itself", "just", "let", "like", "many", "may",
-  "maybe", "might", "more", "most", "much", "must", "need", "not", "now",
-  "off", "once", "only", "other", "our", "ours", "out", "over", "own",
-  "please", "put", "same", "she", "should", "since", "some", "still", "such",
+  "how", "into", "its", "itself", "just", "let", "like", "many", "may", "maybe",
+  "might", "more", "most", "much", "must", "need", "not", "now", "off", "once",
+  "one", "ones", "only", "other", "our", "ours", "out", "over", "own", "please",
+  "put", "same", "she", "should", "since", "some", "still", "stock", "such",
   "than", "that", "the", "their", "theirs", "them", "then", "there", "these",
   "they", "this", "those", "through", "too", "under", "until", "very", "want",
   "was", "way", "were", "what", "when", "where", "which", "while", "who",
@@ -921,6 +921,8 @@ const ASSISTANT_SEARCH_STOP_WORDS = new Set([
  * The meaningful words of a question. Tokens of two characters or fewer and
  * the stop list go, because Convex text search is an OR: left in, "what do
  * you have" would match the whole shop and call the answer exhaustive.
+ * Numbers stay at any length: "14" is how a shopper asks for a length, and
+ * the search text carries each SKU's length and size.
  */
 export function tokenizeAssistantCatalogQuery(query: string): string[] {
   return query
@@ -928,7 +930,9 @@ export function tokenizeAssistantCatalogQuery(query: string): string[] {
     .split(/[^\p{L}\p{N}]+/u)
     .filter(
       (token) =>
-        Array.from(token).length > 2 && !ASSISTANT_SEARCH_STOP_WORDS.has(token),
+        /^\p{N}+$/u.test(token) ||
+        (Array.from(token).length > 2 &&
+          !ASSISTANT_SEARCH_STOP_WORDS.has(token)),
     );
 }
 
