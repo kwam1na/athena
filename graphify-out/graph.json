@@ -63119,7 +63119,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_skusearch_ts",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L956",
+      "source_location": "L960",
       "target": "skusearch_searchassistantvisibleproductskuswithctx",
       "weight": 1
     },
@@ -63155,7 +63155,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_skusearch_ts",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L925",
+      "source_location": "L927",
       "target": "skusearch_tokenizeassistantcatalogquery",
       "weight": 1
     },
@@ -206027,7 +206027,7 @@
       "relation": "calls",
       "source": "skusearch_isprojectionassistantvisible",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L1056",
+      "source_location": "L1060",
       "target": "skusearch_searchassistantvisibleproductskuswithctx",
       "weight": 1
     },
@@ -206039,7 +206039,7 @@
       "relation": "calls",
       "source": "skusearch_normalizelookup",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L977",
+      "source_location": "L981",
       "target": "skusearch_searchassistantvisibleproductskuswithctx",
       "weight": 1
     },
@@ -206051,7 +206051,7 @@
       "relation": "calls",
       "source": "skusearch_tokenizeassistantcatalogquery",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L965",
+      "source_location": "L969",
       "target": "skusearch_searchassistantvisibleproductskuswithctx",
       "weight": 1
     },
@@ -332716,7 +332716,7 @@
       "label": "searchAssistantVisibleProductSkusWithCtx()",
       "norm_label": "searchassistantvisibleproductskuswithctx()",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L956"
+      "source_location": "L960"
     },
     {
       "community": 62,
@@ -332743,7 +332743,7 @@
       "label": "tokenizeAssistantCatalogQuery()",
       "norm_label": "tokenizeassistantcatalogquery()",
       "source_file": "packages/athena-webapp/convex/inventory/skuSearch.ts",
-      "source_location": "L925"
+      "source_location": "L927"
     },
     {
       "community": 62,

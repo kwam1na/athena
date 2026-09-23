@@ -1431,7 +1431,7 @@ describe("assistant catalogue query tokens", () => {
   it("keeps the words a shopper's question is actually about", () => {
     expect(
       tokenizeAssistantCatalogQuery("Do you have a burgundy BOB wig in 14?"),
-    ).toEqual(["burgundy", "bob", "wig"]);
+    ).toEqual(["burgundy", "bob", "wig", "14"]);
   });
 
   it("drops a question that asks nothing, so it is never called a search", () => {
@@ -1440,14 +1440,20 @@ describe("assistant catalogue query tokens", () => {
     expect(tokenizeAssistantCatalogQuery("do you have any of the")).toEqual([]);
     expect(tokenizeAssistantCatalogQuery("is it in?")).toEqual([]);
     expect(tokenizeAssistantCatalogQuery("   ")).toEqual([]);
+    expect(
+      tokenizeAssistantCatalogQuery("Which ones do you have in stock?"),
+    ).toEqual([]);
   });
 
-  it("splits on punctuation and drops the fragments that are too short", () => {
-    // `14` and `20` go with every other one- and two-character token: the
-    // rule is the plan's, not a judgement about these particular digits.
+  it("splits on punctuation and keeps numbers of any length", () => {
+    // A number is how a shopper asks for a length, and the search text
+    // carries each SKU's length, so `14` and `20` stay while short words go.
     expect(tokenizeAssistantCatalogQuery("BOB-14 / LACE-20")).toEqual([
       "bob",
+      "14",
       "lace",
+      "20",
     ]);
+    expect(tokenizeAssistantCatalogQuery("a bob in 8")).toEqual(["bob", "8"]);
   });
 });

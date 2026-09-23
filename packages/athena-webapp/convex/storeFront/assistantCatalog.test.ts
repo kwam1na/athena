@@ -673,7 +673,12 @@ describe("exhaustive and hasMore", () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
 
-    for (const q of ["", "do you have any of the", "is it in?"]) {
+    for (const q of [
+      "",
+      "do you have any of the",
+      "is it in?",
+      "Which ones do you have in stock?",
+    ]) {
       const body = await ask(t, storeId, q);
       expect([q, body.matches, body.exhaustive, body.hasMore]).toEqual([
         q,
@@ -682,6 +687,77 @@ describe("exhaustive and hasMore", () => {
         false,
       ]);
     }
+  });
+
+  it("finds a length asked for as a bare number", async () => {
+    const t = convexTest(schema, modules);
+    const { otherStoreId: storeId } = await seedStore(t);
+    await t.run(async (ctx) => {
+      const store = await ctx.db.get("store", storeId);
+      const categoryId = await ctx.db.insert("category", {
+        name: "Wigs",
+        slug: "wigs",
+        showOnStorefront: true,
+        storeId,
+      } as never);
+      const subcategoryId = await ctx.db.insert("subcategory", {
+        categoryId,
+        name: "Bob wigs",
+        slug: "bob-wigs",
+        storeId,
+      } as never);
+      for (const [length, name] of [
+        [8, "Short bob wig"],
+        [10, "Classic bob wig"],
+        [14, "Long bob wig"],
+      ] as const) {
+        const productId = await ctx.db.insert("product", {
+          availability: "live",
+          categoryId,
+          subcategoryId,
+          currency: "GHS",
+          description: "A short bob wig.",
+          inventoryCount: 10,
+          isVisible: true,
+          name,
+          organizationId: store!.organizationId,
+          quantityAvailable: 10,
+          slug: `bob-wig-${length}`,
+          storeId,
+          createdByUserId: store!.createdByUserId,
+        } as never);
+        const productSkuId = await ctx.db.insert("productSku", {
+          images: [],
+          inventoryCount: 10,
+          isVisible: true,
+          length,
+          netPrice: 40_000,
+          price: 45_000,
+          productId,
+          productName: name,
+          quantityAvailable: 10,
+          storeId,
+          unitCost: 20_000,
+        } as never);
+        await upsertProductSkuSearchProjection(ctx, productSkuId, {
+          advanceRevision: false,
+        });
+      }
+    });
+
+    // The number alone reaches the index and matches only the 14-inch wig.
+    const byLength = await ask(t, storeId, "14 inch", 10);
+    expect(byLength.matches.map((match) => match.productSlug)).toEqual([
+      "bob-wig-14",
+    ]);
+
+    // Beside product words it adds a matching term without narrowing the OR.
+    // convex-test does not rank text matches, so relevance order is not
+    // asserted here; only that the 14-inch wig is among the answers.
+    const asked = await ask(t, storeId, "bob wig 14 inch", 10);
+    expect(asked.matches.map((match) => match.productSlug)).toEqual(
+      expect.arrayContaining(["bob-wig-8", "bob-wig-10", "bob-wig-14"]),
+    );
   });
 
   it("reports an exhaustive search over the visible catalogue", async () => {
