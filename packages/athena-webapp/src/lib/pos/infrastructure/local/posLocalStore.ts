@@ -634,7 +634,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     const validationMetadata = normalizeEventValidationMetadata(
       input.validationMetadata,
     );
-    const activity = getInitialActivityState(input.type);
+    const activity = getInitialActivityState(input);
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
       schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
@@ -739,9 +739,12 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
   }
 
   function getInitialActivityState(
-    type: PosLocalEventType,
+    input: PosLocalAppendEventInput,
   ): PosLocalActivityReportState | undefined {
-    return canReportPosRegisterSessionLocalActivityType(type)
+    if (input.type.startsWith("expense.") && !input.localRegisterSessionId) {
+      return undefined;
+    }
+    return canReportPosRegisterSessionLocalActivityType(input.type)
       ? { status: "pending" }
       : undefined;
   }

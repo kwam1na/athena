@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { posUploadPageDiagnosticsValidator } from "../../../shared/posUploadPageDiagnostics";
 
 export const posTerminalRecoveryCommandTypeValidator = v.union(
   v.literal("retry_sync"),
@@ -57,7 +58,9 @@ export const posTerminalRecoveryExpectedEvidenceValidator = v.object({
       v.literal("unknown"),
     ),
   ),
-  drawerAuthorityStatus: v.optional(v.union(v.literal("healthy"), v.literal("blocked"))),
+  drawerAuthorityStatus: v.optional(
+    v.union(v.literal("healthy"), v.literal("blocked")),
+  ),
   localRegisterSessionId: v.optional(v.string()),
   localStoreAvailable: v.optional(v.boolean()),
   localReviewDetailsCollected: v.optional(v.boolean()),
@@ -130,6 +133,7 @@ const posTerminalRecoveryStoredLocalReviewEventValidator = v.object({
 });
 
 export const posTerminalRecoveryCommandAckValidator = v.object({
+  uploadPageDiagnostics: v.optional(posUploadPageDiagnosticsValidator),
   acknowledgedAt: v.number(),
   clearedLocalReviewEventIds: v.optional(v.array(v.string())),
   localReviewEvents: v.optional(

@@ -11,6 +11,7 @@ import type {
   UpdateApplyOptions,
   UpdateCoordinatorSnapshot,
 } from "@/lib/app-update/updateCoordinator";
+import type { PosUploadPageDiagnostics } from "../../../../../shared/posUploadPageDiagnostics";
 
 export type PosTerminalRecoveryCommandType =
   | "retry_sync"
@@ -38,6 +39,7 @@ export type PosTerminalRecoveryCommand = {
 };
 
 export type PosTerminalRecoveryCommandResult = {
+  uploadPageDiagnostics?: PosUploadPageDiagnostics;
   clearedLocalReviewEventIds?: string[];
   commandId: string;
   diagnostics?: Record<string, string | number | boolean | null>;
@@ -74,14 +76,14 @@ export type PosTerminalRecoveryLocalReviewEvent = {
 };
 
 export type PosTerminalRecoveryCommandCallbackResult = {
+  uploadPageDiagnostics?: PosUploadPageDiagnostics;
   message?: string;
   refreshedAt?: number;
   status?: string;
 };
 
 export type PosTerminalRecoveryReviewResolutionResult =
-  | { ok: true; serverConfirmedAt: number }
-  | { ok: false; message?: string };
+  { ok: true; serverConfirmedAt: number } | { ok: false; message?: string };
 
 type PosLocalRuntimeStore = PosLocalStorePort;
 
@@ -638,6 +640,9 @@ async function executeCallbackCommand(
   });
 
   return completed(context.command, {
+    ...(result.uploadPageDiagnostics
+      ? { uploadPageDiagnostics: result.uploadPageDiagnostics }
+      : {}),
     diagnostics: {
       ...(result.refreshedAt ? { refreshedAt: result.refreshedAt } : {}),
       ...(result.status ? { status: result.status } : {}),
@@ -1063,6 +1068,7 @@ function isDrawerAuthorityBlockReason(
 function completed(
   command: PosTerminalRecoveryCommand,
   options: {
+    uploadPageDiagnostics?: PosUploadPageDiagnostics;
     clearedLocalReviewEventIds?: string[];
     diagnostics?: Record<string, string | number | boolean | null>;
     localReviewEvents?: PosTerminalRecoveryLocalReviewEvent[];
@@ -1073,6 +1079,9 @@ function completed(
 ): PosTerminalRecoveryCommandResult {
   return {
     commandId: getCommandId(command),
+    ...(options.uploadPageDiagnostics
+      ? { uploadPageDiagnostics: options.uploadPageDiagnostics }
+      : {}),
     ...(options.clearedLocalReviewEventIds &&
     options.clearedLocalReviewEventIds.length > 0
       ? { clearedLocalReviewEventIds: options.clearedLocalReviewEventIds }

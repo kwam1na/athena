@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>POS Terminal Sync Starvation And Upload Page Diagnostics</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="3f7ad5f57e15567fd51f3357fa5323291039569831dc3a1d92cb9dd1aae7095c"
+      data-athena-report-base="e7e042ae038772347b3b5887c18c9b9f97b75d07"
+    >
+      <header data-report-section="header">
+        <h1>POS terminal sync starvation and upload page diagnostics</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/v26-2087-terminal-sync-recovery</li>
+          <li>10984 tests across 902 files, green</li>
+          <li>Three reviewers</li>
+          <li>Four review rounds; one path removed, not deferred</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Issue</dt>
+          <dd>V26-2087</dd>
+          <dt>Follow-ups</dt>
+          <dd>V26-2114, V26-2117</dd>
+          <dt>Base</dt>
+          <dd>origin/main e7e042ae</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate — merge pending</dd>
+          <dt>Deploy</dt>
+          <dd>Already live in production; this PR reconciles main to it</dd>
+          <dt>Root alignment</dt>
+          <dd>Pending</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          A POS terminal could stop uploading events forever while reporting
+          itself healthy. The background drain read only the oldest 250 local
+          events; if none of those 250 happened to be uploadable, the drain
+          concluded there was nothing to do and never looked further. The queue
+          behind that window grew without bound and no signal ever said so.
+        </p>
+        <p>
+          This delivery fixes the starvation by paging forward until it finds a
+          candidate or reaches the end of the log, stops mislabelling
+          register-less expense events as activity-reportable, repairs the
+          review-event count that the operator health surface reads, and adds a
+          schema round-trip so a terminal can hand back a read-only sample of
+          its upload pages for diagnosis.
+        </p>
+        <p>
+          <strong>The server-settled review recovery path is deliberately not
+          part of this change.</strong> It was written and reviewed, but review
+          established that no client could reach it, so it was removed rather
+          than shipped as dead code. V26-2087's "converge without manual
+          intervention" criterion is therefore carried entirely by V26-2114, and
+          a reviewed implementation is preserved at commit
+          <code>d5681c5e</code>.
+        </p>
+        <p>
+          This code is unusual in one respect: it was deployed to production
+          from a local unpushed branch on 2026-09-17 and has been running ever
+          since. Production data already carries the field it adds. Main lacked
+          the commit, so deploying main would have failed schema validation and
+          reverted a live fix. This PR reconciles main to production, with every
+          gate re-run from scratch rather than trusting that history.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem in plain language</h2>
+        <p>
+          The POS is local-first. Every sale, refund and drawer movement is
+          written to an IndexedDB event log on the terminal, and a background
+          worker drains that log to the server. The terminal is usable whether
+          or not the network is.
+        </p>
+        <p>
+          The drain worked in pages of 250 events, ordered oldest first. Each
+          cycle it asked the local store for the first 250 events, filtered them
+          down to the ones actually worth uploading, and uploaded those. If the
+          filter produced nothing, the cycle ended.
+        </p>
+        <p>
+          The unstated assumption is that if there is anything to upload, some of
+          it will be in the oldest 250. That holds right up until 250 consecutive
+          non-uploadable events accumulate at the head of the log. Then the drain
+          reads the same dead 250 events on every cycle, forever, while real
+          sales pile up behind them. Nothing errors. The terminal reports itself
+          idle, because from its own point of view it has nothing to do.
+        </p>
+        <p>
+          Expense events recorded outside a register session made that head-block
+          easy to reach. They were marked as pending activity reports even though
+          they have no register session to report activity against, so they
+          looked like work the drain should care about, were counted as pending,
+          and never cleared.
+        </p>
+        <p>
+          A second, quieter failure: the operator-facing terminal health surface
+          reports how many events are sitting in review. That count was read from
+          a debug field the runtime published, and if the runtime had published a
+          stale zero while review samples were in fact present, the operator saw
+          zero. A zero reads as "nothing wrong here", which is the most expensive
+          thing a broken counter can say.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of the local event log as a conveyor belt with a 250-item
+          inspection window at the front. The drain looks only at what is inside
+          the window. It never moves the window; it assumes that if the belt has
+          anything worth shipping, some of it is on screen.
+        </p>
+        <p>
+          Put 250 items on the belt that the inspector is required to ignore, and
+          the belt jams. Not because anything broke — because the inspector
+          correctly concluded that everything it can see is fine, and it can only
+          see the jam.
+        </p>
+        <p>
+          The fix is not a bigger window. A bigger window just moves the number
+          at which the jam happens. The fix is to let the window <em>slide</em>:
+          keep advancing it until either something worth shipping appears or the
+          belt genuinely ends. A short page (fewer than 250 events) is the
+          end-of-belt signal.
+        </p>
+
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Upload drain</h3>
+        <dl>
+          <dt>Before</dt>
+          <dd>
+            One read of the oldest 250 events per cycle. No candidates in that
+            page means no work this cycle, and the same page is re-read next
+            cycle. Unbounded starvation, reported as idle.
+          </dd>
+          <dt>After</dt>
+          <dd>
+            Page forward by <code>afterSequence</code> until a page contains a
+            drain or activity candidate, or the page comes back short. A
+            continuation that fails to advance the sequence throws rather than
+            looping silently.
+          </dd>
+        </dl>
+        <h3>Expense events without a register session</h3>
+        <dl>
+          <dt>Before</dt>
+          <dd>
+            Given an initial activity state of <code>pending</code> purely on
+            event type, so they permanently occupied the head of the log as
+            work that could never clear.
+          </dd>
+          <dt>After</dt>
+          <dd>
+            Expense-typed events appended without a
+            <code>localRegisterSessionId</code> are given no activity state and
+            are excluded from the activity-candidate predicate, on the same
+            condition in both places so the two decisions cannot drift apart.
+          </dd>
+        </dl>
+        <h3>Review-event count on the health surface</h3>
+        <dl>
+          <dt>Before</dt>
+          <dd>Read from the published debug counter alone.</dd>
+          <dt>After</dt>
+          <dd>
+            The maximum of the debug counter, the events actually in
+            <code>needs_review</code>, and the number of published review
+            diagnostic samples. Any one source seeing review work is enough; a
+            stale zero can no longer mask the other two.
+          </dd>
+        </dl>
+        <h3>Upload page diagnostics</h3>
+        <dl>
+          <dt>Before</dt>
+          <dd>
+            No way to ask a stuck terminal what its upload pages actually
+            contained, short of physical access.
+          </dd>
+          <dt>After</dt>
+          <dd>
+            A bounded, read-only sample travels back on the recovery command
+            acknowledgement. The collector reads at most 2 pages of 250 events
+            per terminal id in scope and excludes review events; the service
+            then rejects any acknowledgement carrying more than 4 pages, an
+            event page over 250, a page index other than 0 or 1, or a string
+            over 160 characters. Those bounds reject rather than truncate, and
+            they live in the service, not the shared validator, which pins the
+            payload shape plus the <code>250</code> page size and
+            <code>includeReviewEvents: false</code> literals. Collecting the
+            sample changes and retries nothing.
+          </dd>
+        </dl>
+
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <code>src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts</code>
+              </td>
+              <td>
+                Holds the drain. The paging loop in
+                <code>readScopedPosLocalUploadEvents</code> is the starvation
+                fix, and the activity-candidate predicate gained the
+                register-less expense exclusion.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>src/lib/pos/infrastructure/local/posLocalStore.ts</code>
+              </td>
+              <td>
+                Assigns the initial activity state on append. Changed to take
+                the whole input so it can see whether a register session exists,
+                mirroring the runtime predicate.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>src/lib/pos/infrastructure/local/uploadPageDiagnostics.ts</code>
+              </td>
+              <td>
+                Collects the bounded read-only page sample. New file; the
+                read-only property is the whole point of it.
+              </td>
+            </tr>
+            <tr>
+              <td><code>shared/posUploadPageDiagnostics.ts</code></td>
+              <td>
+                The single Convex validator both client and server use, so the
+                diagnostics round-trip cannot drift between layers.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts</code>
+              </td>
+              <td>
+                The three-way <code>Math.max</code> for
+                <code>reviewEventCount</code>. Small change, directly operator
+                visible.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>convex/pos/application/terminalRecovery/terminalCommandService.ts</code>
+              </td>
+              <td>
+                Validates inbound diagnostics against explicit bounds. Note that
+                most of the added lines here are Prettier reflow, not new logic.
+              </td>
+            </tr>
+            <tr>
+              <td><code>convex/pos/public/terminals.ts</code></td>
+              <td>
+                Carries the diagnostics validator wiring: the
+                <code>uploadPageDiagnostics</code> field on the recovery command
+                return validator and on the acknowledge mutation's arguments.
+              </td>
+            </tr>
+            <tr>
+              <td><code>convex/schemas/pos/posTerminalRecovery.ts</code></td>
+              <td>
+                Adds <code>acknowledgement.uploadPageDiagnostics</code>. This
+                field is already present in production data, which is why main
+                could not be deployed without this commit.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ol>
+          <li>
+            The upload drain pages forward instead of re-reading a fixed head
+            window, with a non-advancing continuation treated as a hard error.
+          </li>
+          <li>
+            Expense events without a register session are neither given a
+            pending activity state nor treated as activity candidates.
+          </li>
+          <li>
+            <code>reviewEventCount</code> takes the maximum of three independent
+            sources rather than trusting the debug counter.
+          </li>
+          <li>
+            A bounded, read-only upload-page diagnostics sample travels back
+            on the recovery acknowledgement, shape-validated by a shared Convex
+            validator and bounds-checked by the service.
+          </li>
+          <li>
+            The drain no longer republishes the runtime sync debug snapshot from
+            its pending read. That deletion is exactly why the review count now
+            derives from three sources rather than trusting that publication.
+          </li>
+        </ol>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            The 250-event page size. The bug was the fixed window, not its size,
+            and changing the size would only move the failure threshold.
+          </li>
+          <li>
+            The operator UI and the recovery preview. Delivering the
+            server-settled clear action is a cross-layer feature change tracked
+            in V26-2114, so
+            <code>convex/pos/application/queries/terminals.ts</code> is left
+            byte-identical to main.
+          </li>
+          <li>
+            Review-event inclusion in diagnostics. Samples deliberately exclude
+            review events so collecting diagnostics cannot itself perturb the
+            review queue.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="deferral">
+        <h2>What is not here, and why</h2>
+        <p>
+          V26-2087 asked that a terminal stuck on locally-flagged reviews the
+          server has already settled should converge <em>without manual
+          intervention</em>. That criterion is <strong>out of scope for this
+          change</strong> and is carried entirely by V26-2114.
+        </p>
+        <p>
+          An implementation of it was written and went through three review
+          rounds. Review then established that it was dead code end to end: the
+          action was produced by <code>previewTerminalRecovery</code>, which no
+          client calls, and the operator UI's action finder matches only
+          <code>commandContext.localReviewClearAll === true</code>, which the
+          new action never set. Nothing could request it, so the claim-time
+          revalidation could never fire.
+        </p>
+        <p>
+          Rather than ship a dead path, or defer a P0 finding against it, the
+          path was removed from this change. Removing it is behaviour-neutral
+          against what production runs today, since it was unreachable there
+          too. The reviewed implementation is preserved at commit
+          <code>d5681c5e</code>, and the findings already fixed in it — append
+          to <code>terminalActions</code> rather than replacing, cache the page
+          read per register session, scan newest-first, make the claim gate
+          all-or-nothing — are recorded on V26-2114 so they are not
+          reintroduced.
+        </p>
+        <p>
+          One further follow-up is open against code that <em>is</em> in this
+          change: <strong>V26-2117</strong>, a bound mismatch found while
+          fact-checking this report. The diagnostics collector emits 2 pages per
+          terminal id in scope while the service rejects above 4 pages total, so
+          a scope resolving to three or more ids can have its whole
+          acknowledgement refused.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <h3>Automated</h3>
+        <ul>
+          <li>
+            The full webapp Vitest suite: 10984 tests across 902 files, green.
+          </li>
+          <li>
+            Operation admission: exit 0, zero findings. Convex changed-file lint,
+            Convex audit, and <code>@athena/webapp</code> typecheck all green.
+          </li>
+          <li>
+            Graphify artifacts rebuilt on the rebased tree and
+            <code>graphify:check</code> re-run fresh, rather than carrying the
+            stale artifacts from the original commit.
+          </li>
+        </ul>
+        <h3>Review</h3>
+        <p>
+          Three reviewers — outcome correctness, adversarial testing, and
+          correctness — across four rounds.
+        </p>
+        <ul>
+          <li>
+            <strong>Round 1:</strong> all three requested changes. The decisive
+            finding was the unreachable settled-clear action (verified
+            independently, then deferred to V26-2114). Also fixed: the preview
+            replacing rather than appending
+            <code>terminalActions</code>; read amplification in the settlement
+            scan; and a scan window that read oldest-first and was therefore
+            inert on a busy register, because the successor sale is always the
+            newest row.
+          </li>
+          <li>
+            <strong>Round 2:</strong> two approvals; adversarial testing
+            requested changes. It found
+            that the round-1 fixes were themselves under-pinned — every existing
+            test passed exactly one review, so the new per-session cache could be
+            keyed by a constant, and the claim gate weakened from all-settled to
+            any-settled, both with the suite fully green.
+          </li>
+          <li>
+            <strong>Round 3:</strong> unanimous approval with zero findings,
+            after two test rows closed those holes.
+          </li>
+          <li>
+            <strong>Round 4:</strong> after the server-settled path was removed,
+            a re-review scoped to the removal. Adversarial testing confirmed
+            every mutation for the kept code still fails the suite and that the
+            removal left no orphaned or vacuous tests; both correctness lenses
+            confirmed the code removal was clean and flagged only that these
+            delivery artifacts still described the removed path as shipped,
+            which this revision corrects.
+          </li>
+        </ul>
+        <p>
+          Mutation testing was used throughout rather than coverage: a test that
+          survives the deletion of the behaviour it claims to pin is not
+          evidence.
+        </p>
+        <p>
+          The removal itself came out of the review. A P0 for an unreachable
+          path cannot honestly be deferred, and relabelling it to pass the
+          delivery gate would have put a false severity in the permanent
+          record; removing the path was the resolution that left the evidence
+          truthful.
+        </p>
+        <h3>Status</h3>
+        <dl>
+          <dt>Merge</dt>
+          <dd>Pending</dd>
+          <dt>Production deploy</dt>
+          <dd>
+            The kept fixes have been live since 2026-09-17 from the pre-rebase
+            local branch. This PR reconciles main to them; no new deploy is part
+            of this delivery.
+          </dd>
+          <dt>Backfill</dt>
+          <dd>Not applicable to this PR</dd>
+          <dt>Root alignment</dt>
+          <dd>Pending</dd>
+        </dl>
+        <p>
+          The Linear issue carries a validation block dated 2026-09-17. That is
+          history from the original deploy, not evidence for this PR; everything
+          above was re-run on the rebased tree.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for next time</h2>
+        <ul>
+          <li>
+            <strong>A bounded read that reports "nothing to do" needs a
+            liveness argument.</strong> Any fixed-window scan over a growing log
+            should say why the window is guaranteed to contain work when work
+            exists, or it should page.
+          </li>
+          <li>
+            <strong>Silence is the expensive failure mode.</strong> This bug
+            produced no error and a healthy-looking terminal. When adding a
+            drain, ask what it looks like when it stops making progress.
+          </li>
+          <li>
+            <strong>Derive a flag from the data it describes.</strong> The
+            expense-event bug existed because the initial activity state was
+            decided from the event type while the candidate predicate looked at
+            the register session. Two places, one fact.
+          </li>
+          <li>
+            <strong>Never let a counter that gates operator attention read from
+            one source.</strong> A stale zero is indistinguishable from good
+            news.
+          </li>
+          <li>
+            <strong>A fix's own tests need mutation pressure too.</strong> Round
+            2 caught that the round-1 fixes were unpinned. Fixes written under
+            review pressure are exactly the code least likely to have adversarial
+            tests.
+          </li>
+          <li>
+            <strong>Deploying from an unpushed local branch creates a schema
+            trap.</strong> Production carried a field main did not know about, so
+            main became undeployable. If it is worth deploying, it is worth
+            pushing.
+          </li>
+          <li>
+            <strong>An unreachable code path is not a partial feature, it is an
+            undelivered one.</strong> Round 1 traced the call graph instead of
+            trusting that server-side tests meant the feature worked, and the
+            path was removed rather than shipped dead.
+          </li>
+          <li>
+            <strong>Do not relabel a finding to get past a gate.</strong> The
+            delivery gate refuses a deferred P0. Reclassifying it would have
+            passed in seconds and left a false severity in the permanent
+            record; reducing the scope removed the finding honestly instead.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Eight of ten to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the upload drain stop making progress while reporting the
+              terminal as idle?
+            </p>
+            <ol data-quiz-options>
+              <li>The network connection was silently dropping uploads.</li>
+              <li data-quiz-correct>
+                Its fixed 250-event window filled with non-uploadable events.
+              </li>
+              <li>
+                The IndexedDB transaction deadlocked silently on every drain
+                cycle, leaving the queue untouched.
+              </li>
+              <li>The server rejected the batch without an error code.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The drain read only the oldest 250 events each cycle. Once 250
+              non-uploadable events sat at the head of the log, it correctly
+              found nothing to do in the only page it could see. Nothing
+              failed, so nothing was reported: from the terminal's point of
+              view there was genuinely no work.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why was raising the page size above 250 rejected as the fix?
+            </p>
+            <ol data-quiz-options>
+              <li>It would have exceeded the Convex argument size limit.</li>
+              <li>It would have broken the diagnostics schema's page bound.</li>
+              <li data-quiz-correct>
+                A larger fixed window only moves the number of head-blocking
+                events at which the same starvation occurs.
+              </li>
+              <li>IndexedDB cannot return more than 250 rows per read.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The defect is the fixed window, not its width. Only advancing the
+              window removes the failure mode rather than relocating it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What tells the paging loop it has reached the end of the log?
+            </p>
+            <ol data-quiz-options>
+              <li>An explicit end-of-log sentinel event.</li>
+              <li data-quiz-correct>
+                A page shorter than 250 events, since a full page means more may
+                follow.
+              </li>
+              <li>A null <code>afterSequence</code> returned by the store.</li>
+              <li>The sequence number wrapping back to zero.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A short page is the conventional end-of-stream signal for
+              sequence-paged reads, and it costs no extra round trip.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why had main become undeployable before this commit landed?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                The production Convex deployment had been pinned to an older
+                schema version by an operator.
+              </li>
+              <li data-quiz-correct>
+                Production data already carried a field main's schema did not
+                declare, so deploying main failed schema validation.
+              </li>
+              <li>
+                Main's lockfile had drifted from the deployed one, so the build
+                could not be reproduced.
+              </li>
+              <li>The POS E2E job was cancelled by a concurrency group.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The commit was deployed to production from an unpushed local
+              branch, so production began writing
+              <code>acknowledgement.uploadPageDiagnostics</code> while main
+              still knew nothing about it. Deploying main would have failed
+              validation and reverted a live fix.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did register-less expense events make the head-block easy to
+              reach?
+            </p>
+            <ol data-quiz-options>
+              <li>They were written to the log twice per expense.</li>
+              <li data-quiz-correct>
+                They were marked pending activity reports with no register
+                session to report against.
+              </li>
+              <li>
+                They carried no sequence number, so the paging cursor skipped
+                over them on every pass.
+              </li>
+              <li>They were rejected by the server and retried forever.</li>
+            </ol>
+            <p data-quiz-explanation>
+              They looked like unfinished work that could never clear. The
+              initial activity state was decided from the event type alone,
+              while whether the report could ever succeed depended on the
+              register session.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is <code>reviewEventCount</code> now the maximum of three
+              sources rather than the debug counter alone?
+            </p>
+            <ol data-quiz-options>
+              <li>To make the number match the server's count exactly.</li>
+              <li>Because the debug counter was removed from the runtime.</li>
+              <li data-quiz-correct>
+                Because a stale zero from any one source would otherwise hide
+                review work from the operator, and a zero reads as "nothing
+                wrong".
+              </li>
+              <li>To avoid an extra IndexedDB read on the health path.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Any single source observing review work is sufficient evidence that
+              review work exists; only the maximum preserves that.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why do the diagnostics bounds reject an oversized acknowledgement
+              instead of truncating it?
+            </p>
+            <ol data-quiz-options>
+              <li>Truncation would break the shared Convex validator's shape.</li>
+              <li data-quiz-correct>
+                A silently trimmed sample would give a confident but wrong
+                answer about why the drain looked empty.
+              </li>
+              <li>
+                The acknowledgement is written in a single transaction that
+                cannot be partially applied.
+              </li>
+              <li>Convex rejects any payload above a fixed byte ceiling.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The sample exists to diagnose a terminal that is already
+              misbehaving, so a quietly incomplete one is worse than none. The
+              bounds are explicit service-side checks on page count, event
+              count, page index and string length; the shared validator pins
+              only the shape and the <code>250</code> and
+              <code>includeReviewEvents: false</code> literals.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is the register-session condition applied in two places for
+              expense events?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Convex requires client and server predicates to be declared
+                separately.
+              </li>
+              <li>
+                One guards the append path and the other guards a legacy
+                migration path.
+              </li>
+              <li data-quiz-correct>
+                The initial activity state and the activity-candidate predicate
+                are two decisions about the same fact, so they must not drift
+                apart.
+              </li>
+              <li>
+                The second check exists only to satisfy the typechecker after
+                the signature changed.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The original defect was exactly this drift: the initial state was
+              decided from the event type alone, while whether the activity
+              report could ever succeed depended on the register session.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why was the server-settled review path removed rather than shipped
+              with its finding deferred?
+            </p>
+            <ol data-quiz-options>
+              <li>Its tests were too slow for the CI budget.</li>
+              <li>It conflicted with a schema field already live in production.</li>
+              <li data-quiz-correct>
+                A P0 cannot honestly be deferred, and the path was unreachable,
+                so removing it was behaviour-neutral against production.
+              </li>
+              <li>
+                The reviewers could not agree on whether the claim gate was
+                correct.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The delivery gate refuses a deferred P0, and relabelling the
+              severity to get past that would have put a false record in the
+              permanent evidence. Because no client could reach the path,
+              deleting it changed no behaviour anywhere.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What does a mutation that leaves the suite green tell you?
+            </p>
+            <ol data-quiz-options>
+              <li>The mutated code is unreachable and can be deleted.</li>
+              <li data-quiz-correct>
+                No test actually pins that behaviour, whatever the coverage
+                report says.
+              </li>
+              <li>The test suite needs to be run in a different order.</li>
+              <li>The behaviour is correct and therefore needs no test.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Every claim in this delivery was checked by deleting or weakening
+              the behaviour and confirming a test fails. Round 2 found that the
+              fixes written under round-1 review pressure were themselves
+              unpinned — code written in a hurry is the least likely to arrive
+              with adversarial tests.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <dl>
+          <dt>Session context subagent</dt>
+          <dd>
+            Established that the Linear validation block is entirely historical
+            (2026-09-17, pre-rebase) and had to be re-gathered, surfaced six
+            prior <code>docs/solutions</code> predecessors on the touched files,
+            and supplied the churn history that informed the risk read.
+          </dd>
+          <dt>Delivered diff subagent</dt>
+          <dd>
+            Produced the changed-file map, the architectural before and after,
+            the behaviour and failure boundaries, and five risks — including the
+            observation that roughly 73% of the additions in
+            <code>terminalCommandService.ts</code> are Prettier reflow rather
+            than new logic, which kept review attention on the real change.
+          </dd>
+          <dt>lens.outcome-correctness (rounds 1–4)</dt>
+          <dd>
+            Round 1 traced the settled-clear action's call graph and
+            established it was unreachable from any client — the finding that
+            ultimately removed that path from this change. Round 4 confirmed
+            the removal was clean and caught that these delivery artifacts
+            still described the removed path as shipped.
+          </dd>
+          <dt>lens.adversarial-testing (rounds 1–4)</dt>
+          <dd>
+            Ran named mutations for every claimed behaviour across all rounds.
+            Round 1 produced four test-evidence gaps; round 2 showed the round-1
+            fixes were themselves unpinned. Round 4 re-verified that every
+            mutation for the kept code still fails the suite and that the
+            removal left no orphaned or vacuous tests.
+          </dd>
+          <dt>ce-correctness-reviewer (rounds 1–4)</dt>
+          <dd>
+            Identified read amplification in the settlement scan in round 1.
+            In round 4, with that code removed, it confirmed the remaining
+            Convex diff adds no database reads at all, verified the removal left
+            no dangling references, and independently raised the same stale
+            documentation finding.
+          </dd>
+          <dt>Quiz and report reviewer subagent</dt>
+          <dd>
+            Fact-checked every technical claim in this report against the diff
+            and corrected three that were wrong: an unqualified test count that
+            implied the full webapp suite, a page bound attributed to the
+            collector instead of the service, and string and page bounds
+            attributed to the shared validator when they are hand-written
+            service checks. It also found the bound mismatch now tracked as
+            V26-2117, caught a behavioural deletion the report had omitted, and
+            rewrote five quiz questions whose correct option was identifiable
+            by length alone.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

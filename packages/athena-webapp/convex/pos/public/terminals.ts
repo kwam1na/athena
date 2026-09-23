@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { posUploadPageDiagnosticsValidator } from "../../../shared/posUploadPageDiagnostics";
 
 import {
   mutation,
@@ -770,6 +771,7 @@ const terminalRecoveryCommandReturnValidator = v.object({
   executionId: v.optional(v.string()),
   acknowledgement: v.optional(
     v.object({
+      uploadPageDiagnostics: v.optional(posUploadPageDiagnosticsValidator),
       acknowledgedAt: v.number(),
       clearedLocalReviewEventIds: v.optional(v.array(v.string())),
       localReviewEvents: v.optional(
@@ -1835,6 +1837,7 @@ export const claimTerminalRecoveryCommand = mutation({
 
 export const acknowledgeTerminalRecoveryCommand = mutation({
   args: {
+    uploadPageDiagnostics: v.optional(posUploadPageDiagnosticsValidator),
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
     syncSecretHash: v.string(),
@@ -1868,6 +1871,7 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
         createTerminalRecoveryCommandRepository(ctx),
         {
           acknowledgedAt: Date.now(),
+          uploadPageDiagnostics: args.uploadPageDiagnostics,
           clearedLocalReviewEventIds: args.clearedLocalReviewEventIds,
           commandId: args.commandId,
           executionId: args.executionId,
