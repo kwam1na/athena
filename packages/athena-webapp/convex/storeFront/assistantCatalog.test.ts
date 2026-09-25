@@ -22,6 +22,7 @@ import schema from "../schema";
 import {
   ASSISTANT_CATALOG_BODY_MAX_BYTES,
   ASSISTANT_CATALOG_CONTRACT_VERSION,
+  assistantCatalogMatchValidator,
   assistantProductUrlOf,
   fitAssistantCatalogBody,
   search,
@@ -473,6 +474,11 @@ describe("assistant catalogue contract", () => {
     const fitted = fitAssistantCatalogBody(oversized);
 
     expect(fitted.matches.length).toBeLessThan(60);
+    expect(fitted.matches.length).toBeGreaterThan(0);
+    // The kept matches are the leading ones, each untouched, link included.
+    expect(fitted.matches).toEqual(
+      oversized.matches.slice(0, fitted.matches.length),
+    );
     expect(fitted.hasMore).toBe(true);
     expect(new TextEncoder().encode(JSON.stringify(fitted)).length)
       .toBeLessThanOrEqual(ASSISTANT_CATALOG_BODY_MAX_BYTES);
@@ -550,6 +556,25 @@ describe("assistant catalogue contract", () => {
       expect(match).toHaveProperty("productUrl", null);
     }
     assertConformsToExportedReturns(search, body);
+  });
+
+  it("declares productUrl on every match as a string or null", () => {
+    const fields = assistantCatalogMatchValidator.fields;
+    expect(Object.keys(fields).sort()).toEqual([
+      "categoryName",
+      "description",
+      "options",
+      "productName",
+      "productSlug",
+      "productUrl",
+      "subcategoryName",
+    ]);
+    expect(fields.productUrl.isOptional).toBe("required");
+    expect(fields.productUrl.kind).toBe("union");
+    expect(fields.productUrl.members.map((member) => member.kind)).toEqual([
+      "string",
+      "null",
+    ]);
   });
 
   it("builds a product link only from a storefront url and a product", () => {

@@ -107471,7 +107471,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_storefront_assistantcatalog_test_ts",
       "source_file": "packages/athena-webapp/convex/storeFront/assistantCatalog.test.ts",
-      "source_location": "L301",
+      "source_location": "L302",
       "target": "assistantcatalog_test_ask",
       "weight": 1
     },
@@ -107483,7 +107483,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_storefront_assistantcatalog_test_ts",
       "source_file": "packages/athena-webapp/convex/storeFront/assistantCatalog.test.ts",
-      "source_location": "L61",
+      "source_location": "L62",
       "target": "assistantcatalog_test_seedstore",
       "weight": 1
     },
@@ -237814,7 +237814,7 @@
       "label": "ask()",
       "norm_label": "ask()",
       "source_file": "packages/athena-webapp/convex/storeFront/assistantCatalog.test.ts",
-      "source_location": "L301"
+      "source_location": "L302"
     },
     {
       "community": 1207,
@@ -237823,7 +237823,7 @@
       "label": "seedStore()",
       "norm_label": "seedstore()",
       "source_file": "packages/athena-webapp/convex/storeFront/assistantCatalog.test.ts",
-      "source_location": "L61"
+      "source_location": "L62"
     },
     {
       "community": 1207,
