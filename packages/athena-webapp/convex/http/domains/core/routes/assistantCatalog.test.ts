@@ -27,6 +27,7 @@ import {
 } from "../../../../platform/operationAdmission";
 import { hashCatalogAccessTokenValue } from "../../../../inventory/catalogAccess";
 import { CATALOG_READER_REJECTION_BODY } from "../../../../operationAdmission/types";
+import type { AssistantCatalogBody } from "../../../../storeFront/assistantCatalog";
 import { assistantCatalogSearchRouteReadDefinition } from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   assistantCatalogRoutes,
@@ -50,14 +51,37 @@ const ACTIVE_TOKEN = `athcat_${"A".repeat(43)}`;
 const REVOKED_TOKEN = `athcat_${"B".repeat(43)}`;
 const UNKNOWN_TOKEN = `athcat_${"C".repeat(43)}`;
 
+// The route passes the query's answer through untouched; the fixture is typed
+// against the contract so a field the contract gains cannot go missing here.
 const BODY = {
   contractVersion: "assistant_catalog.v1",
   exhaustive: true,
   fetchedAt: "2026-09-22T10:00:00.000Z",
   hasMore: false,
-  matches: [],
+  matches: [
+    {
+      categoryName: "Wigs",
+      description: "A short, glossy bob wig.",
+      options: [
+        {
+          colorName: "Burgundy",
+          imageUrls: [],
+          length: 14,
+          priceAmountMinor: 45_000,
+          priceFormatted: "GH₵450",
+          size: null,
+          sku: "BOB-14",
+          stock: "in_stock",
+        },
+      ],
+      productName: "Burgundy bob wig",
+      productSlug: "burgundy-bob-wig",
+      productUrl: "https://shop.wigclub.test/shop/product/product-bob",
+      subcategoryName: "Bob wigs",
+    },
+  ],
   source: { currency: "GHS", name: "Wig Club" },
-};
+} satisfies AssistantCatalogBody;
 
 type TokenRow = {
   _id: string;
