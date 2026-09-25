@@ -1,0 +1,494 @@
+{
+  "spec": "delivery-run-export/1",
+  "labels": "self-attested; observability, not evidence; unbound to a record",
+  "runId": "run-1cbc6755c880283d",
+  "events": [
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 1,
+      "at": "2026-09-25T04:21:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "run.started",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-2178",
+      "attestation": "self",
+      "payload": {
+        "ticket": "V26-2178",
+        "host": "claude-code",
+        "workflow": {
+          "releaseId": "linear-concurrent-delivery-v1",
+          "profile": "linear"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 2,
+      "at": "2026-09-25T04:21:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "742e3d7994dc4808e6c6ae1699590625ef4586cc",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Each assistant_catalog.v1 match gains productUrl: string | null, the storefront product page the shopper can open (V26-2178)",
+          "acceptanceCriteria": [
+            "Every match carries productUrl as ${STORE_URL}/shop/product/<identifier the storefront product route resolves> with no query string",
+            "productUrl is null when STORE_URL is absent or the identifier is absent",
+            "A trailing slash on STORE_URL is trimmed so no // appears",
+            "The contract version stays assistant_catalog.v1 and the response validator and types carry productUrl on every match",
+            "fitAssistantCatalogBody byte budget is unchanged and productUrl counts toward it",
+            "The HTTP route test fixture response includes productUrl",
+            "Tests fail before the implementation and pass after"
+          ],
+          "finishLine": "merge-ready candidate on the delivery branch with a passing pr:athena gate; no push or merge"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "742e3d7994dc4808e6c6ae1699590625ef4586cc",
+        "candidateBinding": {
+          "deliverableDigest": "a5d728929df8a9178ea5561515665a53b3ea64467253bab85fc8a498e15ba416",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "mergeBaseSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "workspaceId": "6b3c634a727d98457baa34264afd3767dbcf0319c6a8e2d8b1fff3e5af8e6895"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 3,
+      "at": "2026-09-25T04:23:55Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 123562
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 4,
+      "at": "2026-09-25T04:23:58Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 453
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 5,
+      "at": "2026-09-25T04:24:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 447
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 6,
+      "at": "2026-09-25T04:25:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ],
+        "rationale": "the repository-mandated pair plus the single additional reviewer .agents/review-selection.json names"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 7,
+      "at": "2026-09-25T04:25:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "742e3d7994dc4808e6c6ae1699590625ef4586cc",
+      "attestation": "self",
+      "payload": {
+        "round": 1,
+        "candidateTreeSha": "742e3d7994dc4808e6c6ae1699590625ef4586cc",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 8,
+      "at": "2026-09-25T05:48:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8074a6e4d7d3161dd9c4e19a3f397df91b0679e4",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Each assistant_catalog.v1 match gains productUrl: string | null, the storefront product page the shopper can open (V26-2178)",
+          "acceptanceCriteria": [
+            "Every match carries productUrl as ${STORE_URL}/shop/product/<identifier the storefront product route resolves> with no query string",
+            "productUrl is null when STORE_URL is absent or the identifier is absent",
+            "A trailing slash on STORE_URL is trimmed so no // appears",
+            "The contract version stays assistant_catalog.v1 and the response validator and types carry productUrl on every match",
+            "fitAssistantCatalogBody byte budget is unchanged and productUrl counts toward it",
+            "The HTTP route test fixture response includes productUrl",
+            "Tests fail before the implementation and pass after"
+          ],
+          "finishLine": "merge-ready candidate on the delivery branch with a passing pr:athena gate; no push or merge"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "8074a6e4d7d3161dd9c4e19a3f397df91b0679e4",
+        "candidateBinding": {
+          "deliverableDigest": "bb39dcb6fa6a91faa5a6dd2968ba00556d914f6e374a4b4aa2006b7b298c1c35",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "mergeBaseSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "workspaceId": "6b3c634a727d98457baa34264afd3767dbcf0319c6a8e2d8b1fff3e5af8e6895"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 9,
+      "at": "2026-09-25T05:48:25Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1079
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 10,
+      "at": "2026-09-25T05:51:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "policy",
+        "durationMs": 156294
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 11,
+      "at": "2026-09-25T05:51:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8074a6e4d7d3161dd9c4e19a3f397df91b0679e4",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Each assistant_catalog.v1 match gains productUrl: string | null, the storefront product page the shopper can open (V26-2178)",
+          "acceptanceCriteria": [
+            "Every match carries productUrl as ${STORE_URL}/shop/product/<identifier the storefront product route resolves> with no query string",
+            "productUrl is null when STORE_URL is absent or the identifier is absent",
+            "A trailing slash on STORE_URL is trimmed so no // appears",
+            "The contract version stays assistant_catalog.v1 and the response validator and types carry productUrl on every match",
+            "fitAssistantCatalogBody byte budget is unchanged and productUrl counts toward it",
+            "The HTTP route test fixture response includes productUrl",
+            "Tests fail before the implementation and pass after"
+          ],
+          "finishLine": "merge-ready candidate on the delivery branch with a passing pr:athena gate; no push or merge"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "8074a6e4d7d3161dd9c4e19a3f397df91b0679e4",
+        "candidateBinding": {
+          "deliverableDigest": "bb39dcb6fa6a91faa5a6dd2968ba00556d914f6e374a4b4aa2006b7b298c1c35",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "mergeBaseSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "workspaceId": "6b3c634a727d98457baa34264afd3767dbcf0319c6a8e2d8b1fff3e5af8e6895"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 12,
+      "at": "2026-09-25T05:51:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1066
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 13,
+      "at": "2026-09-25T05:57:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 113045
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 14,
+      "at": "2026-09-25T05:57:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "00fbde9596be01f853a7bb04fe9b7ddf853eda2d",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Each assistant_catalog.v1 match gains productUrl: string | null, the storefront product page the shopper can open (V26-2178)",
+          "acceptanceCriteria": [
+            "Every match carries productUrl as ${STORE_URL}/shop/product/<identifier the storefront product route resolves> with no query string",
+            "productUrl is null when STORE_URL is absent or the identifier is absent",
+            "A trailing slash on STORE_URL is trimmed so no // appears",
+            "The contract version stays assistant_catalog.v1 and the response validator and types carry productUrl on every match",
+            "fitAssistantCatalogBody byte budget is unchanged and productUrl counts toward it",
+            "The HTTP route test fixture response includes productUrl",
+            "Tests fail before the implementation and pass after"
+          ],
+          "finishLine": "merge-ready candidate on the delivery branch with a passing pr:athena gate; no push or merge"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "00fbde9596be01f853a7bb04fe9b7ddf853eda2d",
+        "candidateBinding": {
+          "deliverableDigest": "98e0339df86bf455e1af9053182792357ceb880c7d5ab2f1be7c70382c66cf78",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "mergeBaseSha": "cfbcf8206d7d1970e6a0d271e68fa6c3d0bf8806",
+          "workspaceId": "6b3c634a727d98457baa34264afd3767dbcf0319c6a8e2d8b1fff3e5af8e6895"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-1cbc6755c880283d",
+      "seq": 15,
+      "at": "2026-09-25T06:16:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1132338,
+        "digest": "57a17867c5101b5a953f2b364fb854b02c987072088858eae608133fee1aaaa6"
+      }
+    }
+  ],
+  "summary": {
+    "ticket": "V26-2178",
+    "open": true,
+    "startedAt": "2026-09-25T04:21:47Z",
+    "lastAt": "2026-09-25T06:16:03Z",
+    "durationSeconds": 6856,
+    "phases": {
+      "implementationSeconds": 212,
+      "reviewSeconds": 6644,
+      "tailSeconds": 0,
+      "rounds": 1,
+      "gate": {
+        "totalMs": 1134483,
+        "counted": 3,
+        "unreadable": 0,
+        "unseen": false
+      }
+    },
+    "roundsOpened": 1,
+    "roundsClosed": 0,
+    "findings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    }
+  },
+  "costs": {
+    "review": {
+      "coverage": "unreported",
+      "unreportedEntries": 0,
+      "totals": []
+    },
+    "run": {
+      "coverage": "unreported"
+    }
+  },
+  "readout": {
+    "status": "incomplete",
+    "present": [
+      "run.started",
+      "lens.selected",
+      "review.round.opened",
+      "command.completed:gate"
+    ],
+    "missing": [
+      "ticket.read",
+      "posture.declared",
+      "review.round.closed",
+      "command.completed:record",
+      "pr.opened",
+      "run.ended"
+    ],
+    "violations": [
+      "gate-before-closed-round"
+    ],
+    "explanations": [
+      {
+        "violation": "gate-before-closed-round",
+        "because": "the governing gate completion at seq 15 has no closed round this row accepts: the journal carries no round whose latest opening is closed by its own latest close, so no closed round governs",
+        "blocksAdmission": false
+      }
+    ]
+  },
+  "refusedAppends": []
+}
