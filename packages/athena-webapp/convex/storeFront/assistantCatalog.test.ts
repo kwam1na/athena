@@ -12,7 +12,7 @@
  */
 
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
@@ -22,6 +22,8 @@ import schema from "../schema";
 import {
   ASSISTANT_CATALOG_BODY_MAX_BYTES,
   ASSISTANT_CATALOG_CONTRACT_VERSION,
+  assistantCatalogMatchValidator,
+  assistantProductUrlOf,
   fitAssistantCatalogBody,
   search,
   toPlainDescription,
@@ -311,6 +313,12 @@ const ask = async (
 
 /* ------------------------------------------------------- the shape */
 
+const STORE_URL = "https://shop.wigclub.test";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("assistant catalogue contract", () => {
   it("answers a natural-language question with exactly the contract's keys", async () => {
     const t = convexTest(schema, modules);
@@ -341,6 +349,7 @@ describe("assistant catalogue contract", () => {
         "options",
         "productName",
         "productSlug",
+        "productUrl",
         "subcategoryName",
       ]);
       expect(match.options.length).toBeGreaterThan(0);
@@ -449,6 +458,8 @@ describe("assistant catalogue contract", () => {
       ],
       productName: "Burgundy bob wig",
       productSlug: "burgundy-bob-wig",
+      // A full-length page link, so the budget is proven with the field in it.
+      productUrl: `${STORE_URL}/shop/product/k17f3m2x9q8w7e6r5t4y3u2i1o0p9a8s`,
       subcategoryName: "Bob wigs",
     };
     const oversized: AssistantCatalogBody = {
@@ -463,6 +474,11 @@ describe("assistant catalogue contract", () => {
     const fitted = fitAssistantCatalogBody(oversized);
 
     expect(fitted.matches.length).toBeLessThan(60);
+    expect(fitted.matches.length).toBeGreaterThan(0);
+    // The kept matches are the leading ones, each untouched, link included.
+    expect(fitted.matches).toEqual(
+      oversized.matches.slice(0, fitted.matches.length),
+    );
     expect(fitted.hasMore).toBe(true);
     expect(new TextEncoder().encode(JSON.stringify(fitted)).length)
       .toBeLessThanOrEqual(ASSISTANT_CATALOG_BODY_MAX_BYTES);
@@ -501,6 +517,83 @@ describe("assistant catalogue contract", () => {
     expect(stockBySlug["burgundy-bob-wig"]).toContain("low");
     expect(stockBySlug["burgundy-bob-wig"]).toContain("in_stock");
     expect(stockBySlug["blonde-lace-front"]).toEqual(["out"]);
+  });
+
+  it("links each match to the storefront page that resolves it", async () => {
+    vi.stubEnv("STORE_URL", STORE_URL);
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+    const productIdBySlug = await t.run(async (ctx) => {
+      const products = await ctx.db
+        .query("product")
+        .filter((q) => q.eq(q.field("storeId"), storeId))
+        .take(20);
+      return Object.fromEntries(
+        products.map((product) => [product.slug, String(product._id)]),
+      );
+    });
+
+    const body = await ask(t, storeId, "burgundy bob wig blonde lace front");
+
+    expect(body.matches.length).toBeGreaterThan(1);
+    for (const match of body.matches) {
+      expect(match.productUrl).toBe(
+        `${STORE_URL}/shop/product/${productIdBySlug[match.productSlug!]}`,
+      );
+    }
+    assertConformsToExportedReturns(search, body);
+  });
+
+  it("gives every match a null link when the store has no storefront url", async () => {
+    vi.stubEnv("STORE_URL", "");
+    const t = convexTest(schema, modules);
+    const { storeId } = await seedStore(t);
+
+    const body = await ask(t, storeId, "burgundy bob wig");
+
+    expect(body.matches.length).toBeGreaterThan(0);
+    for (const match of body.matches) {
+      expect(match).toHaveProperty("productUrl", null);
+    }
+    assertConformsToExportedReturns(search, body);
+  });
+
+  it("declares productUrl on every match as a string or null", () => {
+    const fields = assistantCatalogMatchValidator.fields;
+    expect(Object.keys(fields).sort()).toEqual([
+      "categoryName",
+      "description",
+      "options",
+      "productName",
+      "productSlug",
+      "productUrl",
+      "subcategoryName",
+    ]);
+    expect(fields.productUrl.isOptional).toBe("required");
+    expect(fields.productUrl.kind).toBe("union");
+    expect(fields.productUrl.members.map((member) => member.kind)).toEqual([
+      "string",
+      "null",
+    ]);
+  });
+
+  it("builds a product link only from a storefront url and a product", () => {
+    expect(assistantProductUrlOf(STORE_URL, "prod123")).toBe(
+      `${STORE_URL}/shop/product/prod123`,
+    );
+    // No query string: the link names the page, not a variant or a campaign.
+    expect(assistantProductUrlOf(STORE_URL, "prod123")).not.toContain("?");
+    expect(assistantProductUrlOf(`${STORE_URL}/`, "prod123")).toBe(
+      `${STORE_URL}/shop/product/prod123`,
+    );
+    expect(assistantProductUrlOf(`${STORE_URL}//`, "prod123")).toBe(
+      `${STORE_URL}/shop/product/prod123`,
+    );
+    expect(assistantProductUrlOf(STORE_URL, null)).toBeNull();
+    expect(assistantProductUrlOf(STORE_URL, "")).toBeNull();
+    expect(assistantProductUrlOf(undefined, "prod123")).toBeNull();
+    expect(assistantProductUrlOf("", "prod123")).toBeNull();
+    expect(assistantProductUrlOf("  /  ", "prod123")).toBeNull();
   });
 
   it("reduces product copy to bounded plain text", () => {

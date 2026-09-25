@@ -23,6 +23,8 @@ import { stockStateOf } from "../stockOps/stockState";
  * Everything in it is already on the storefront: name, description, category,
  * the option axes, the price as this store formats it, and stock as one of
  * three words. Counts, costs, ids and POS flags have no field to travel in.
+ * The one exception is `productUrl`: the storefront's own product page link,
+ * which carries the product id exactly as the storefront's links already do.
  */
 export const ASSISTANT_CATALOG_CONTRACT_VERSION = "assistant_catalog.v1";
 
@@ -54,6 +56,8 @@ export const assistantCatalogMatchValidator = v.object({
   options: v.array(assistantCatalogOptionValidator),
   productName: v.string(),
   productSlug: nullableStringValidator,
+  /** The storefront page for this product; null when the store has no url. */
+  productUrl: nullableStringValidator,
   subcategoryName: nullableStringValidator,
 });
 
@@ -106,10 +110,29 @@ export type AssistantCatalogBody = {
     }>;
     productName: string;
     productSlug: string | null;
+    productUrl: string | null;
     subcategoryName: string | null;
   }>;
   source: { currency: string; name: string };
 };
+
+/**
+ * The storefront page a shopper can open for this product.
+ *
+ * By product id, not slug: the product route resolves either, but slugs are
+ * derived from names and nothing keeps them unique within a store, while the
+ * id names exactly one product — and it is what the storefront's own links
+ * and the discount emails already use. No query string: the link names the
+ * page, not a variant or a campaign.
+ */
+export function assistantProductUrlOf(
+  storeUrl: string | undefined,
+  productId: string | null | undefined,
+): string | null {
+  const base = storeUrl?.trim().replace(/\/+$/, "");
+  if (!base || !productId) return null;
+  return `${base}/shop/product/${productId}`;
+}
 
 function byteLengthOf(body: AssistantCatalogBody): number {
   return new TextEncoder().encode(JSON.stringify(body)).length;
@@ -147,6 +170,7 @@ export async function searchAssistantCatalogWithCtx(
   const currency = store?.currency ?? "GHS";
   const formatter = currencyFormatter(currency);
   const fetchedAt = new Date().toISOString();
+  const storeUrl = process.env.STORE_URL;
 
   const search = await searchAssistantVisibleProductSkusWithCtx(ctx, {
     limit: args.limit,
@@ -195,6 +219,7 @@ export async function searchAssistantCatalogWithCtx(
       }),
       productName: first.productName,
       productSlug: first.productSlug ?? null,
+      productUrl: assistantProductUrlOf(storeUrl, first.productId),
       subcategoryName: first.subcategoryName ?? null,
     };
   });
