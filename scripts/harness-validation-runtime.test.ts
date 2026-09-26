@@ -512,7 +512,11 @@ it("retains canonical build, coverage, report and browser output needs in separa
     )!.mutableOutputs;
   };
   expect(outputs("build")).toEqual(["packages/athena-webapp/dist/"]);
-  expect(outputs("behavior")).toEqual(["artifacts/harness-behavior/"]);
+  const storefrontViteCache = "packages/storefront-webapp/.cache/vite/";
+  expect(outputs("behavior")).toEqual([
+    "artifacts/harness-behavior/",
+    storefrontViteCache,
+  ]);
   expect(
     configured.config.scopedExecution!.profiles.find(
       (p) => p.id === "athena-behavior-full",
@@ -543,7 +547,16 @@ it("retains canonical build, coverage, report and browser output needs in separa
     ).toBe(binding.checkId === "storybook");
   }
   expect(outputs("review")).toEqual(["artifacts/harness-inferential-review/"]);
-  expect(outputs("browser")).toEqual(["artifacts/validation-playwright/"]);
+  expect(outputs("browser")).toEqual([
+    "artifacts/validation-playwright/",
+    storefrontViteCache,
+  ]);
+  for (const profile of configured.config.scopedExecution!.profiles) {
+    expect(profile.mutableOutputs.includes(storefrontViteCache)).toBe(
+      ["athena-behavior-full", "athena-storefront-browser-full"].includes(profile.id),
+    );
+    expect(profile.mutableOutputs.some((output) => output.includes("node_modules"))).toBe(false);
+  }
   expect(env.PLAYWRIGHT_HTML_OUTPUT_DIR).toBe(
     "../../artifacts/validation-playwright/html",
   );
@@ -568,9 +581,16 @@ it("keeps fallback and timing checks in full Git with only their Vitest cache wr
     {
       profile: "packages/athena-webapp:fallback-suite",
       argv: ["bun", "run", "--filter", "@athena/webapp", "test"],
+      package: "athena-webapp",
+    },
+    {
+      profile: "packages/storefront-webapp:fallback-suite",
+      argv: ["bun", "run", "--filter", "@athena/storefront-webapp", "test"],
+      package: "storefront-webapp",
     },
     {
       profile: "packages/athena-webapp:timer-stress",
+      package: "athena-webapp",
       argv: [
         "/bin/sh",
         "-c",
@@ -614,7 +634,7 @@ it("keeps fallback and timing checks in full Git with only their Vitest cache wr
       expect(profile.mutableOutputs).toEqual(
         exact
           ? [
-              "packages/athena-webapp/.cache/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json",
+              `packages/${check.package}/.cache/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json`,
             ]
           : [],
       );

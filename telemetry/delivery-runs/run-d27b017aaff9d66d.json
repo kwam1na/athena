@@ -7396,22 +7396,1000 @@
         "durationMs": 1508787,
         "digest": "7869669fc997f903445ef5ac7abf976e7e5add9997f77237e6fc93da0af9de5f"
       }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a652f1a5-c589-4c49-996c-567a3bb0218e",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 281,
+      "at": "2026-09-20T13:48:56Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "attemptId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "8513c05a-c4e7-4e5f-a978-47fe67c8dfc8",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 282,
+      "at": "2026-09-20T13:48:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "attemptId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "e9d8f90e-03eb-4da7-8207-e40d488bc595",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 283,
+      "at": "2026-09-20T13:48:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1151,
+        "preparation": {
+          "checks": "reused",
+          "reason": "validation-equivalent"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "474cd08c-81c4-422e-82e8-6c4bc528341a",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 284,
+      "at": "2026-09-20T13:48:58Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "attemptId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "record",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "ddd6fa26-96b7-4ba8-b075-64af1f2e76d5",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 285,
+      "at": "2026-09-20T13:49:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "attemptId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "record",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "baab9a57-eaa0-47a6-9afe-72e5977ea709",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 286,
+      "at": "2026-09-20T13:49:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 10601
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a8048a0e-12c6-4275-b832-d0a8d0c27736",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 287,
+      "at": "2026-09-20T13:49:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "attemptId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1d5c17af-cddd-4ad3-abae-34024dacdff6",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 288,
+      "at": "2026-09-20T13:49:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "attemptId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1b5e74dc-3a06-4a55-83d0-af6857ca046f",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 289,
+      "at": "2026-09-20T13:49:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1206,
+        "preparation": {
+          "checks": "reused",
+          "reason": "validation-equivalent"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "c6bb2935-4ba1-45d0-9f2d-61301d954758",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 290,
+      "at": "2026-09-20T13:49:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "attemptId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "65782ec4-745c-46f0-a9fb-49845142dabf",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 291,
+      "at": "2026-09-20T13:49:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "attemptId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "2416de07-70fe-497c-a6db-372c621caf90",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 292,
+      "at": "2026-09-20T13:49:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 9762
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "3b7ec3fd-574d-4ba2-985e-9f95fd8ad780",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 293,
+      "at": "2026-09-20T13:51:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "attemptId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7be615b1-b4cc-42c3-ba41-f0656f34d472",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 294,
+      "at": "2026-09-20T13:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "attemptId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "9f430adf-aa05-41e8-b345-30091447e54b",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 295,
+      "at": "2026-09-20T13:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 4555
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "4075cdce-a799-40fa-9dc2-ef7d83b2a19b",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 296,
+      "at": "2026-09-20T13:51:55Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "attemptId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "c092e336-04fb-47bf-9c70-6ce37de1ad23",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 297,
+      "at": "2026-09-20T13:52:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "attemptId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "dc63c8d2-0ec6-465f-9cb2-dc5f0ee4eb8b",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 298,
+      "at": "2026-09-20T13:52:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 35175,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f8213439-0eb1-45c1-a189-fe18950f01b7",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 299,
+      "at": "2026-09-20T13:53:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "attemptId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "8a8b0a34-4d46-4625-bdb9-76936a7e33d9",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 300,
+      "at": "2026-09-20T13:53:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "attemptId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "c804fbff-43dd-4ffb-97c9-7082cac64788",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 301,
+      "at": "2026-09-20T13:53:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 9481
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-3a6f87be24b0c7b13e4f04c4ff2db542beb4f984f02cc7400521291c5aeca1d8",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 302,
+      "at": "2026-09-20T14:31:51Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "qualification",
+        "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+        "candidateBinding": {
+          "deliverableDigest": "0d9ca7cb960be2617f38a47fc928edf6741d4615991794ab6f3d8d86bc62b925",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "mergeBaseSha": "3d7a4ff7188665c34eb8d4b56b039566cae5de73",
+          "workspaceId": "628fd4770fa14c3dca0dbf63f51b4f8964f6af54fbff11b63f883d45ea349727"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2071-review-extension-sep26",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 303,
+      "at": "2026-09-26T20:57:43Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Four review rounds and one grace round consumed; repairs and activation remain.",
+        "choice": "User authorized judgement calls in direct response to the request for up to three additional rounds. Extend this same delivery by at most three acquired rounds R6 through R8, retaining lens.outcome-correctness, lens.adversarial-testing and athena.ce-correctness-reviewer. Preserve every prior round, finding, full accepted contract and run-d27b017aaff9d66d. No review evidence or validation waived.",
+        "cited": "User 2026-09-26: You have authority to make judgement calls"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-96d4714307a488f0f9d231ced382aa58dd2c62a7754d43bdbcc9088c8c91b3e0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 304,
+      "at": "2026-09-26T21:05:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d3750c58c3fb2c0245601f6e5b8916dece95c833",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "implementation",
+        "candidateTreeSha": "d3750c58c3fb2c0245601f6e5b8916dece95c833",
+        "candidateBinding": {
+          "deliverableDigest": "9a137f939e9d1ac9925464d0a2937711f49e22580cf5cf6337d93cbf5f31892d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "99c202c06c9c86876fa9b0bdb6d508dba75e5ca9",
+          "mergeBaseSha": "99c202c06c9c86876fa9b0bdb6d508dba75e5ca9",
+          "workspaceId": "859d8ae174b6c7660a5c76d6fe0b15793294cb1f15c5cacf1e30fd67905baa91"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "e8b7b991-4b5b-4ee0-87bc-a1c089699f1e",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 305,
+      "at": "2026-09-26T21:07:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "attemptId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1e3483e4-944a-4177-8b95-da9999b1572c",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 306,
+      "at": "2026-09-26T21:08:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "attemptId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "112d8284-8880-4f55-8204-4f04f6e507da",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 307,
+      "at": "2026-09-26T21:08:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 42584,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "98dfae81-bc5f-4b72-ba06-20987a67ba90",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 308,
+      "at": "2026-09-26T21:08:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "attemptId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "39f6cdce-c269-4242-93a0-bbf551366e4a",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 309,
+      "at": "2026-09-26T21:08:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "attemptId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "3bc12af6-ee31-4080-acef-09c9aafcc97f",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 310,
+      "at": "2026-09-26T21:08:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 748
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2071-cache-review-inactive-sep26",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 311,
+      "at": "2026-09-26T21:11:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Whether to acquire an additional code-review round for the prepared cache repair.",
+        "choice": "Product delivery:resume reports review.green not_applicable for prepared tree ab212142ba0a476c4a56831ce7483386ddb8582d:19 relevant lines, no sensitive paths. Retain the actual resolution and continue without acquisition. This is not review reuse. No round6 opened or consumed; required report review remains separate.",
+        "cited": "/Users/kwamina/delivery-artifacts/v26-2024-review/resume-before-round6.json"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "2aa8e5cd-6593-44dc-8739-dbcdb43205c9",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 312,
+      "at": "2026-09-26T21:12:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "attemptId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "38700821-e069-4c5c-b4eb-f2b27f069ab0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 313,
+      "at": "2026-09-26T21:12:54Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "attemptId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "5b1a5f49-5365-4a62-974b-6c821b0e665c",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 314,
+      "at": "2026-09-26T21:12:54Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 42859,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-5398a6bb74f7386497922856786d93e413f572527a392a8afd0edf30285f76fe",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 315,
+      "at": "2026-09-26T21:13:51Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+        "candidateBinding": {
+          "deliverableDigest": "c342d59fc4b4e8443fe9e4ba4fb5eda609170c05fa68d4b0862ca3fe0b4d0bea",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "99c202c06c9c86876fa9b0bdb6d508dba75e5ca9",
+          "mergeBaseSha": "99c202c06c9c86876fa9b0bdb6d508dba75e5ca9",
+          "workspaceId": "859d8ae174b6c7660a5c76d6fe0b15793294cb1f15c5cacf1e30fd67905baa91"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "42c385c7-0638-4f92-8d00-ccdf58975113",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 316,
+      "at": "2026-09-26T21:13:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "attemptId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a20a3861-47c2-4e75-9625-74906ea94daa",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 317,
+      "at": "2026-09-26T21:39:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "attemptId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "edaa34f8-c320-4044-a47c-d13e193dd0b1",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 318,
+      "at": "2026-09-26T21:39:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1547692,
+        "digest": "ca6b5b05ce01b87c1dc0bf3e0a5e8c946da5e4a91a45a47382bfd1e0992e0add"
+      }
     }
   ],
   "summary": {
     "ticket": "V26-2024",
     "open": true,
     "startedAt": "2026-09-17T01:32:34Z",
-    "lastAt": "2026-09-20T13:48:55Z",
-    "durationSeconds": 303381,
+    "lastAt": "2026-09-26T21:39:39Z",
+    "durationSeconds": 850025,
     "phases": {
       "implementationSeconds": 272904,
       "reviewSeconds": 27008,
-      "tailSeconds": 3469,
+      "tailSeconds": 550113,
       "rounds": 5,
       "gate": {
-        "totalMs": 7575284,
-        "counted": 6,
+        "totalMs": 9122976,
+        "counted": 7,
         "unreadable": 0,
         "unseen": false
       }
@@ -7465,7 +8443,7 @@
     "explanations": [
       {
         "violation": "record-before-gate",
-        "because": "the governing record completion at seq 264 precedes the governing gate completion at seq 280, so the record was written before the gate it reports",
+        "because": "the governing record completion at seq 286 precedes the governing gate completion at seq 318, so the record was written before the gate it reports",
         "blocksAdmission": false
       }
     ]
@@ -7493,7 +8471,7 @@
     }
   ],
   "progress": {
-    "asOf": "2026-09-20T13:48:55Z",
+    "asOf": "2026-09-26T21:39:39Z",
     "activities": [
       {
         "activityId": "command-ab7b5248-4eed-4417-b314-87a9de0de2e8",
@@ -8981,9 +9959,251 @@
             "lastObservedAt": "2026-09-20T13:48:55Z",
             "lifecycleIncomplete": true,
             "superseded": false,
-            "freshness": "recent",
+            "freshness": "stale",
             "waits": [],
             "startedAt": "2026-09-20T13:23:46Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "currentAttemptId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+        "attempts": [
+          {
+            "activityId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+            "attemptId": "command-34eb496d-eaaa-4375-b0ed-6a59c9085a82",
+            "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T13:48:56Z",
+            "lastObservedAt": "2026-09-20T13:48:57Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:48:56Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "currentAttemptId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+        "attempts": [
+          {
+            "activityId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+            "attemptId": "command-bb444ebc-c73b-4f1a-995a-a3a6f489a3af",
+            "candidateTreeSha": "44eb49f89b0b1132decd64f3201dbc6b1f0cbbd3",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "record",
+            "firstObservedAt": "2026-09-20T13:48:58Z",
+            "lastObservedAt": "2026-09-20T13:49:08Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:48:58Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "currentAttemptId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+        "attempts": [
+          {
+            "activityId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+            "attemptId": "command-b355db49-d2b4-4a84-b4c0-8818dede5b8a",
+            "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T13:49:09Z",
+            "lastObservedAt": "2026-09-20T13:49:09Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:49:09Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "currentAttemptId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+        "attempts": [
+          {
+            "activityId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+            "attemptId": "command-ef8bc7c0-1116-4e32-8648-43b9de7dea65",
+            "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "verify",
+            "firstObservedAt": "2026-09-20T13:49:10Z",
+            "lastObservedAt": "2026-09-20T13:49:19Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:49:10Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "currentAttemptId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+        "attempts": [
+          {
+            "activityId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+            "attemptId": "command-f2472455-a2e0-4df5-9201-11b9f3cf3b07",
+            "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "verify",
+            "firstObservedAt": "2026-09-20T13:51:02Z",
+            "lastObservedAt": "2026-09-20T13:51:06Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:51:02Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "currentAttemptId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+        "attempts": [
+          {
+            "activityId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+            "attemptId": "command-f6b6d0c7-280a-4ce7-a03e-8736607d75c6",
+            "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T13:51:55Z",
+            "lastObservedAt": "2026-09-20T13:52:30Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:51:55Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "currentAttemptId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+        "attempts": [
+          {
+            "activityId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+            "attemptId": "command-5920ac69-2b7b-4259-8061-0e9aa1f3b116",
+            "candidateTreeSha": "f5a6fffc3081d3e4a62bc0400f688a6ab8dda884",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "verify",
+            "firstObservedAt": "2026-09-20T13:53:04Z",
+            "lastObservedAt": "2026-09-20T13:53:13Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T13:53:04Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "currentAttemptId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+        "attempts": [
+          {
+            "activityId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+            "attemptId": "command-a54c8833-d5ec-4b54-8013-8c3ee1653ada",
+            "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-26T21:07:26Z",
+            "lastObservedAt": "2026-09-26T21:08:08Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-26T21:07:26Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "currentAttemptId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+        "attempts": [
+          {
+            "activityId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+            "attemptId": "command-5bb0e1e3-7f2c-4c28-971a-c5d7ddc59a4e",
+            "candidateTreeSha": "ab212142ba0a476c4a56831ce7483386ddb8582d",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "review-context",
+            "firstObservedAt": "2026-09-26T21:08:30Z",
+            "lastObservedAt": "2026-09-26T21:08:30Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-26T21:08:30Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "currentAttemptId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+        "attempts": [
+          {
+            "activityId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+            "attemptId": "command-a8831e65-1d47-4b1f-b61d-c695683f222a",
+            "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-26T21:12:11Z",
+            "lastObservedAt": "2026-09-26T21:12:54Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-26T21:12:11Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "currentAttemptId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+        "attempts": [
+          {
+            "activityId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+            "attemptId": "command-c5ab75ef-677c-4c5e-8694-c336ce0839c2",
+            "candidateTreeSha": "315039c23e1fe0c08a46d0f7dd26ef6974484d0c",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "gate",
+            "firstObservedAt": "2026-09-26T21:13:52Z",
+            "lastObservedAt": "2026-09-26T21:39:39Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "recent",
+            "waits": [],
+            "startedAt": "2026-09-26T21:13:52Z",
             "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
           }
         ]

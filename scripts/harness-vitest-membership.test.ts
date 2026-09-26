@@ -29,6 +29,7 @@ async function fixture(run: (root: string) => Promise<void>) {
       import { defineConfig } from 'vitest/config';
       import { writeFileSync } from 'node:fs';
       export default defineConfig({
+        cacheDir: './.cache',
         plugins: [{name:'membership-control',resolveId(id){if(id==='virtual:control')return '\\0control'},load(id){if(id==='\\0control')return 'export default 17'}}],
         test: {include:['src/**/*.test.ts','nested/**/*.test.ts'],setupFiles:['./setup.ts'],maxWorkers:1,provide:{configured:true},reporters:['json',{onInit(ctx){writeFileSync('worker.json',JSON.stringify({maxWorkers:ctx.config.maxWorkers}))}}],outputFile:'./result.json'}
       });
@@ -78,6 +79,23 @@ async function execute(
 }
 
 describe("exact Vitest membership", () => {
+  it("keeps result caching private to the fixture instead of shared dependencies", async () =>
+    fixture(async (root) => {
+      const results =
+        "vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json";
+      const shared = join(modules, ".vite", results);
+      const before = await Bun.file(shared).exists()
+        ? await readFile(shared, "utf8")
+        : null;
+      const result = await execute(root, ["--test-file", "src/a.test.ts"]);
+      expect(result.code, result.output).toBe(0);
+      const after = await Bun.file(shared).exists()
+        ? await readFile(shared, "utf8")
+        : null;
+      expect(after).toBe(before);
+      expect(await Bun.file(join(root, ".cache", results)).exists()).toBe(true);
+    }));
+
   for (const nodeEnv of [undefined, "production", ""]) {
     it(
       `matches CLI bootstrap before config and in workers with NODE_ENV=${JSON.stringify(nodeEnv)}`,
@@ -99,7 +117,7 @@ describe("exact Vitest membership", () => {
             `import {defineConfig} from 'vitest/config';
           import {writeFileSync} from 'node:fs';
           writeFileSync('bootstrap.json',JSON.stringify({TEST:process.env.TEST,VITEST:process.env.VITEST,NODE_ENV:process.env.NODE_ENV}));
-          export default defineConfig({test:{include:['src/a.test.ts'],maxWorkers:1}});`,
+          export default defineConfig({cacheDir:'./.cache',test:{include:['src/a.test.ts'],maxWorkers:1}});`,
           );
           await writeFile(
             join(root, "src/a.test.ts"),
@@ -254,7 +272,7 @@ describe("exact Vitest membership", () => {
     fixture(async (root) => {
       await writeFile(
         join(root, "vitest.config.ts"),
-        `import {defineConfig} from 'vitest/config';export default defineConfig({test:{projects:[{test:{name:'one',include:['src/a.test.ts']}},{test:{name:'two',include:['src/a.test.ts']}}]}});`,
+        `import {defineConfig} from 'vitest/config';export default defineConfig({cacheDir:'./.cache',test:{projects:[{test:{name:'one',include:['src/a.test.ts']}},{test:{name:'two',include:['src/a.test.ts']}}]}});`,
       );
       const result = await execute(root, ["--test-file", "src/a.test.ts"]);
       expect(result.code).toBe(1);

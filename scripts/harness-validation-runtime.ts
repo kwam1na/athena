@@ -123,7 +123,11 @@ export function configureScopedValidation(
     profile("athena-inferential-full", [
       "artifacts/harness-inferential-review/",
     ]),
-    profile("athena-behavior-full", ["artifacts/harness-behavior/"], "browser"),
+    profile(
+      "athena-behavior-full",
+      ["artifacts/harness-behavior/", "packages/storefront-webapp/.cache/vite/"],
+      "browser",
+    ),
     profile(
       "athena-browser-full",
       ["artifacts/validation-playwright/", "packages/athena-webapp/dist/"],
@@ -131,7 +135,7 @@ export function configureScopedValidation(
     ),
     profile(
       "athena-storefront-browser-full",
-      ["artifacts/validation-playwright/"],
+      ["artifacts/validation-playwright/", "packages/storefront-webapp/.cache/vite/"],
       "browser",
     ),
   ];
@@ -216,6 +220,15 @@ function validationProfile(
           ])))
   )
     return "athena-webapp-unit-full";
+  if (
+    check.cwd === "." &&
+    check.profile === "packages/storefront-webapp:fallback-suite" &&
+    JSON.stringify(check.argv) ===
+      JSON.stringify([
+        "bun", "run", "--filter", "@athena/storefront-webapp", "test",
+      ])
+  )
+    return "athena-storefront-unit-full";
   if (check.profile === "packages/athena-webapp:browser")
     return "athena-browser-full";
   if (check.profile === "packages/storefront-webapp:browser")

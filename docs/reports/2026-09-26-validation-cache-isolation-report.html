@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Keep validation caches outside frozen dependencies</title></head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="8304cb0353dd0408d2d7e0e40c1f2e0193a4f28cf6f60131ac10f28c88d38968">
+<header data-report-section="header">
+<h1>Keep validation caches outside frozen dependencies</h1>
+<ul data-report-pills><li>Delivery candidate</li><li>1,924 harness tests passed</li><li>Activation pending</li></ul>
+<dl data-report-meta>
+<dt>Issue</dt><dd><a href="https://linear.app/v26-labs/issue/V26-2071">V26-2071</a></dd>
+<dt>Branch</dt><dd>codex/v26-2071-cache-repair</dd>
+<dt>Base commit</dt><dd>99c202c06c9c86876fa9b0bdb6d508dba75e5ca9</dd>
+<dt>Prepared source tree</dt><dd>ab212142ba0a476c4a56831ce7483386ddb8582d; before this report</dd>
+<dt>PR</dt><dd>Pending local delivery gate</dd>
+<dt>Status</dt><dd>Candidate repairs; merge, root alignment and full qualification pending</dd>
+</dl>
+</header>
+<section data-report-section="summary"><h2>What this candidate delivers</h2>
+<p>Three narrow Athena repairs keep test and development-server caches out of frozen dependency inputs. The storefront fallback selects its existing unit profile, temporary membership tests own their caches, and storefront Vite writes to a separate declared cache directory.</p>
+<p>The installed delivery product continues to verify source and dependencies. This candidate does not activate affected validation or complete V26-2071. The full qualification corpus, trusted hosted health, cold verification, performance comparisons, rollback and final activation remain required.</p>
+</section>
+<section data-report-section="problem"><h2>Why successful commands still failed</h2>
+<p>Hosted health run 35516273775 recorded eight failed attempts after their commands exited zero. Post-command verification reported <code>check_snapshot_drift</code>: the frozen workspace no longer matched its captured inputs. A green test process alone could not authorize admission.</p>
+<p>The artifact did not retain changed-path inventories. Focused investigation reproduced three cache-write mechanisms, but does not establish the exact cause of every historical hosted failure. Those failures remain open pending current qualification.</p>
+</section>
+<section data-report-section="mental-model"><h2>Inputs stay fixed; outputs have named homes</h2>
+<p>A validation command receives fixed source and installed dependencies, plus narrowly declared places to write results. A cache is still an output even when a tool chooses its location automatically. Temporary fixtures also need their own output locations: a dependency symlink can send writes outside a fixture that is later deleted.</p>
+<p>Vite's optimized modules are executable generated files. Fresh native workspaces and a separate cache directory keep those writes from weakening verification of installed dependencies.</p>
+</section>
+<section data-report-section="before-after"><h2>Three corrections</h2>
+<table><thead><tr><th>Surface</th><th>Before</th><th>After</th></tr></thead><tbody>
+<tr><td>Root storefront fallback</td><td>Core profile allowed no outputs despite running package Vitest.</td><td>Exact command selects the existing full-Git storefront unit profile and its one timing-results file.</td></tr>
+<tr><td>Membership fixtures</td><td>Default Vitest cache could escape through shared node_modules.</td><td>Every fixture config uses a private .cache directory.</td></tr>
+<tr><td>Storefront development server</td><td>Vite wrote optimized modules under node_modules/.vite.</td><td>Vite writes .cache/vite; only behavior and storefront browser profiles allow it.</td></tr>
+</tbody></table>
+</section>
+<section data-report-section="key-files"><h2>Where the behavior lives</h2>
+<table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td>packages/storefront-webapp/vite.config.ts</td><td>Selects the generated optimizer-cache location.</td></tr>
+<tr><td>scripts/harness-validation-runtime.ts</td><td>Matches the exact fallback command and declares narrow output permissions.</td></tr>
+<tr><td>scripts/harness-validation-runtime.test.ts</td><td>Checks exact mapping, conservative altered-command handling, two cache-owning profiles and no dependency write grants.</td></tr>
+<tr><td>scripts/harness-vitest-membership.test.ts</td><td>Isolates fixture caches and executes a regression against shared-cache leakage.</td></tr>
+<tr><td>graphify-out/graph.json</td><td>Refreshes generated source locations through the canonical generator.</td></tr>
+<tr><td>docs/solutions/test-failures/validation-caches-must-not-mutate-frozen-dependencies-2026-09-26.md</td><td>Retains the diagnosis, repair boundaries and prevention guidance.</td></tr>
+</tbody></table>
+</section>
+<section data-report-section="changes"><h2>Scope and failure boundaries</h2>
+<p>Altered fallback arguments retain conservative handling. All profiles continue to reject mutable node_modules outputs. Source snapshots, full-Git execution, test membership, installed-product payloads and snapshot-failure semantics remain intact.</p>
+<p>The change affects validation configuration and fixtures. It introduces no customer feature or application/backend deployment. Legacy validation remains the default until the separately evidenced activation succeeds.</p>
+</section>
+<section data-report-section="validation"><h2>Evidence and outstanding delivery steps</h2>
+<table><thead><tr><th>Evidence</th><th>Observed result and limit</th></tr></thead><tbody>
+<tr><td>Test-first controls</td><td>Two focused tests failed before repairs: missing storefront output permission and an actual shared-cache write.</td></tr>
+<tr><td>Two affected harness files</td><td>31 passed, zero failed, 261 assertions.</td></tr>
+<tr><td>Full harness</td><td>1,924 passed, zero failed, 6,238 assertions across 101 files; 401.06 seconds.</td></tr>
+<tr><td>Real storefront startup and module transform</td><td>104 generated files moved from the dependency cache to the declared cache; the old dependency cache was unchanged. This is not a browser-flow test.</td></tr>
+<tr><td>Generated artifacts and preparation</td><td>Canonical generation and mechanical preparation passed for the source tree above.</td></tr>
+<tr><td>Code-review admission</td><td>The installed product returned review.green: not_applicable for the prepared repair candidate. This is an inactive obligation, not reused review evidence.</td></tr>
+<tr><td>Report review and canonical delivery gate</td><td>Pending for this candidate report.</td></tr>
+<tr><td>Hosted health, cold verification and full qualification</td><td>Pending; no historical failure is closed by these local results.</td></tr>
+<tr><td>Merge and root alignment</td><td>Pending.</td></tr>
+<tr><td>Application/backend deployment</td><td>Not applicable to this authorized delivery.</td></tr>
+</tbody></table>
+<p>The same full delivery contract and prior review history remain retained. The user authorized up to three further acquired rounds, with outcome correctness, adversarial testing and Athena correctness unchanged. No additional code-review round has been acquired for this repair.</p>
+</section>
+<section data-report-section="guidance"><h2>Debug the write before widening permissions</h2>
+<ol><li>Keep a failed snapshot check failed even when its subprocess exits zero.</li><li>Observe actual writes around one representative command, including symlink destinations.</li><li>Match the exact command to its execution profile and isolate generated caches.</li><li>Retain positive execution and negative boundary tests.</li><li>Requalify the current candidate through native and hosted paths before claiming activation readiness.</li></ol>
+</section>
+<section data-report-section="quiz" data-quiz-pass-threshold="8"><h2>Check your understanding</h2><ol data-quiz>
+<li data-quiz-question><p data-quiz-prompt>Why can a test command that exits zero still fail validation?</p><ol data-quiz-options><li data-quiz-correct>It may have changed frozen inputs.</li><li>Zero always means a skipped test.</li><li>All caches are forbidden.</li></ol><p data-quiz-explanation>Admission includes snapshot integrity as well as command success.</p></li>
+<li data-quiz-question><p data-quiz-prompt>Why did the storefront fallback need a different profile?</p><ol data-quiz-options><li>It needed fewer tests.</li><li data-quiz-correct>Its exact root command runs a package config that writes a results cache.</li><li>It should avoid Git context.</li></ol><p data-quiz-explanation>Output ownership follows actual execution, not just the launch directory.</p></li>
+<li data-quiz-question><p data-quiz-prompt>What happens to an altered fallback command?</p><ol data-quiz-options><li>It inherits the permission automatically.</li><li>It skips verification.</li><li data-quiz-correct>It retains conservative fallback handling.</li></ol><p data-quiz-explanation>The special mapping requires the exact declared command.</p></li>
+<li data-quiz-question><p data-quiz-prompt>How can deleting a fixture leave cache data behind?</p><ol data-quiz-options><li data-quiz-correct>A dependency symlink can direct writes outside the fixture.</li><li>Git recreates all deleted files.</li><li>Private caches cannot be deleted.</li></ol><p data-quiz-explanation>Fixture cleanup does not remove files written through a symlink into shared dependencies.</p></li>
+<li data-quiz-question><p data-quiz-prompt>Where does storefront Vite now write its optimized modules?</p><ol data-quiz-options><li>Anywhere inside node_modules.</li><li data-quiz-correct>The package's .cache/vite directory.</li><li>The tracked source directory.</li></ol><p data-quiz-explanation>The generated cache is separated from installed dependency inputs.</p></li>
+<li data-quiz-question><p data-quiz-prompt>Which profiles permit that Vite cache?</p><ol data-quiz-options><li>Every validation profile.</li><li>Only typechecks.</li><li data-quiz-correct>Behavior and storefront browser profiles.</li></ol><p data-quiz-explanation>The permission follows the checks that launch the storefront development server.</p></li>
+<li data-quiz-question><p data-quiz-prompt>What did the 104-file startup comparison prove?</p><ol data-quiz-options><li data-quiz-correct>The real server relocated its generated cache without changing the old dependency cache.</li><li>Every browser flow passed.</li><li>All hosted failures were closed.</li></ol><p data-quiz-explanation>The observation is scoped to startup and module transformation.</p></li>
+<li data-quiz-question><p data-quiz-prompt>What does review.green: not_applicable mean here?</p><ol data-quiz-options><li>The old review was reused.</li><li data-quiz-correct>The product says the review obligation is inactive for this candidate.</li><li>Validation is waived.</li></ol><p data-quiz-explanation>It does not supply passing validation or reused review evidence.</p></li>
+<li data-quiz-question><p data-quiz-prompt>What should happen to the historical hosted failures now?</p><ol data-quiz-options><li>Clear them because local tests passed.</li><li>Ignore them because raw exits were zero.</li><li data-quiz-correct>Retain them until the required current evidence resolves them.</li></ol><p data-quiz-explanation>The retained artifact does not prove the exact changed paths for every failure.</p></li>
+<li data-quiz-question><p data-quiz-prompt>Does this repair complete V26-2071?</p><ol data-quiz-options><li data-quiz-correct>No; full qualification, activation, rollback and delivery closeout remain.</li><li>Yes; passing the harness activates the policy.</li><li>Yes; a solution note replaces hosted proof.</li></ol><p data-quiz-explanation>The approved finish line includes measured and verified authoritative activation.</p></li>
+</ol></section>
+<section data-report-section="subagent-evidence"><h2>Report research and review</h2>
+<ul><li><strong>cache_report_context</strong> read the accepted contract and retained diagnostic handoffs, and checked review history and finish-line boundaries.</li><li><strong>cache_report_diff</strong> inspected the candidate diff and local results, and supplied the file map and before/after explanation.</li><li><strong>Report reviewer</strong>: pending; no report approval claimed.</li></ul>
+</section>
+</article>
+</body>
+</html>
