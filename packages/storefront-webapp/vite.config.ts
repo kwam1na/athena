@@ -8,6 +8,8 @@ const storefrontQaHost = process.env.STOREFRONT_QA_HOST ?? "qa.wigclub.store";
 
 export default defineConfig({
   base: "/",
+  // Keep generated executable caches out of the frozen dependency inventory.
+  cacheDir: ".cache/vite",
   server: {
     host: "127.0.0.1",
     port: 5174,

@@ -33431,7 +33431,7 @@
       "relation": "calls",
       "source": "harness_validation_runtime_configurescopedvalidation",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L160",
+      "source_location": "L164",
       "target": "harness_validation_runtime_selectionenvironment",
       "weight": 1
     },
@@ -33455,7 +33455,7 @@
       "relation": "calls",
       "source": "harness_validation_runtime_validationenvironment",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L271",
+      "source_location": "L284",
       "target": "harness_validation_runtime_isstorybookbuild",
       "weight": 1
     },
@@ -33467,7 +33467,7 @@
       "relation": "calls",
       "source": "harness_validation_runtime_validationprofile",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L226",
+      "source_location": "L239",
       "target": "harness_validation_runtime_isstorybookbuild",
       "weight": 1
     },
@@ -33479,7 +33479,7 @@
       "relation": "calls",
       "source": "harness_validation_runtime_validationprofile",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L185",
+      "source_location": "L189",
       "target": "harness_validation_runtime_qualifiedfrontendcommand",
       "weight": 1
     },
@@ -167759,7 +167759,7 @@
       "relation": "contains",
       "source": "vite_config_manualchunks",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L26",
+      "source_location": "L28",
       "target": "packages_storefront_webapp_vite_config_ts",
       "weight": 1
     },
@@ -200243,7 +200243,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L315",
+      "source_location": "L328",
       "target": "harness_validation_runtime_createvalidationciruntime",
       "weight": 1
     },
@@ -200255,7 +200255,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L298",
+      "source_location": "L311",
       "target": "harness_validation_runtime_isstorybookbuild",
       "weight": 1
     },
@@ -200267,7 +200267,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L232",
+      "source_location": "L245",
       "target": "harness_validation_runtime_qualifiedfrontendcommand",
       "weight": 1
     },
@@ -200279,7 +200279,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L253",
+      "source_location": "L266",
       "target": "harness_validation_runtime_selectionenvironment",
       "weight": 1
     },
@@ -200291,7 +200291,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L264",
+      "source_location": "L277",
       "target": "harness_validation_runtime_validationenvironment",
       "weight": 1
     },
@@ -200303,7 +200303,7 @@
       "relation": "contains",
       "source": "scripts_harness_validation_runtime_ts",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L177",
+      "source_location": "L181",
       "target": "harness_validation_runtime_validationprofile",
       "weight": 1
     },
@@ -200519,7 +200519,7 @@
       "relation": "contains",
       "source": "scripts_harness_vitest_membership_test_ts",
       "source_file": "scripts/harness-vitest-membership.test.ts",
-      "source_location": "L59",
+      "source_location": "L60",
       "target": "harness_vitest_membership_test_execute",
       "weight": 1
     },
@@ -224728,7 +224728,7 @@
       "label": "createValidationCiRuntime()",
       "norm_label": "createvalidationciruntime()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L315"
+      "source_location": "L328"
     },
     {
       "community": 0,
@@ -224737,7 +224737,7 @@
       "label": "isStorybookBuild()",
       "norm_label": "isstorybookbuild()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L298"
+      "source_location": "L311"
     },
     {
       "community": 0,
@@ -224746,7 +224746,7 @@
       "label": "qualifiedFrontendCommand()",
       "norm_label": "qualifiedfrontendcommand()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L232"
+      "source_location": "L245"
     },
     {
       "community": 0,
@@ -224755,7 +224755,7 @@
       "label": "selectionEnvironment()",
       "norm_label": "selectionenvironment()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L253"
+      "source_location": "L266"
     },
     {
       "community": 0,
@@ -224764,7 +224764,7 @@
       "label": "validationEnvironment()",
       "norm_label": "validationenvironment()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L264"
+      "source_location": "L277"
     },
     {
       "community": 0,
@@ -224773,7 +224773,7 @@
       "label": "validationProfile()",
       "norm_label": "validationprofile()",
       "source_file": "scripts/harness-validation-runtime.ts",
-      "source_location": "L177"
+      "source_location": "L181"
     },
     {
       "community": 0,
@@ -245509,7 +245509,7 @@
       "label": "manualChunks()",
       "norm_label": "manualchunks()",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L26"
+      "source_location": "L28"
     },
     {
       "community": 1371,
@@ -248551,7 +248551,7 @@
       "label": "execute()",
       "norm_label": "execute()",
       "source_file": "scripts/harness-vitest-membership.test.ts",
-      "source_location": "L59"
+      "source_location": "L60"
     },
     {
       "community": 1432,
